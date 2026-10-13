@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>VoxelCraft</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="water-overlay"></div>
+<div id="hud">
+  <div id="crosshair"></div>
+  <div id="info"></div>
+  <div id="blockname"></div>
+  <div id="hotbar"></div>
+  <div id="joy-base"><div id="joy-knob"></div></div>
+  <div id="btns">
+    <div class="btn" id="btn-jump">&#9650;</div>
+    <div class="btn small" id="btn-down">&#9660;</div>
+    <div class="btn small" id="btn-fly">VOAR</div>
+  </div>
+  <div class="btn small" id="btn-menu">II</div>
+</div>
+<div id="menu">
+  <h1>VoxelCraft</h1>
+  <div id="menu-status"></div>
+  <div class="menu-buttons">
+    <button id="play">Jogar</button>
+    <button id="newworld">Novo mundo</button>
+  </div>
+  <label>Distância de visão: <b id="rdv"></b><input type="range" id="rd" min="2" max="8" step="1"></label>
+  <label>Sensibilidade: <b id="sensv"></b><input type="range" id="sens" min="0.3" max="3" step="0.1"></label>
+  <div class="help touch-only">
+    Joystick (lado esquerdo): andar &middot; Arrastar (lado direito): olhar<br>
+    Toque rápido: colocar bloco &middot; Segurar: quebrar bloco<br>
+    &#9650; pular/subir &middot; VOAR liga/desliga o voo &middot; Toque na barra para escolher o bloco
+  </div>
+  <div class="help desktop-only">
+    WASD: andar &middot; Mouse: olhar &middot; Espaço: pular &middot; Shift: correr/descer &middot; F: voar<br>
+    Clique esquerdo: quebrar &middot; Clique direito: colocar &middot; 1-9 / roda do mouse: escolher bloco &middot; Esc: menu
+  </div>
+</div>
+<script type="module" src="main.js"></script>
+</body>
+</html>

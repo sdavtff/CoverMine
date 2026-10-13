@@ -1,0 +1,44 @@
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-family: system-ui, sans-serif; color: #fff;
+  user-select: none; -webkit-user-select: none; touch-action: none; overscroll-behavior: none; }
+#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+#water-overlay { position: fixed; inset: 0; background: rgba(20, 60, 160, 0.35); pointer-events: none; display: none; }
+#hud { position: fixed; inset: 0; pointer-events: none; }
+#hud > * { pointer-events: auto; }
+#crosshair { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; pointer-events: none !important; }
+#crosshair::before, #crosshair::after { content: ''; position: absolute; background: rgba(255,255,255,0.85); mix-blend-mode: difference; }
+#crosshair::before { left: 10px; top: 0; width: 2px; height: 22px; }
+#crosshair::after { left: 0; top: 10px; width: 22px; height: 2px; }
+#info { position: absolute; left: calc(8px + env(safe-area-inset-left)); top: 6px; font-size: 12px; text-shadow: 1px 1px 0 #000; pointer-events: none !important; white-space: pre; }
+#blockname { position: absolute; left: 50%; bottom: calc(min(52px, 9vw) + 22px); transform: translateX(-50%); font-size: 15px; text-shadow: 1px 1px 0 #000;
+  pointer-events: none !important; opacity: 0; transition: opacity .4s; }
+#hotbar { position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); display: flex; gap: 2px; padding: 3px;
+  background: rgba(0,0,0,0.45); border: 2px solid rgba(255,255,255,0.25); border-radius: 4px; }
+.slot { width: min(46px, 7.2vw); height: min(46px, 7.2vw); border: 2px solid transparent; display: flex; align-items: center; justify-content: center; }
+.slot canvas { width: 90%; height: 90%; image-rendering: pixelated; }
+.slot.sel { border-color: #fff; background: rgba(255,255,255,0.15); }
+#joy-base { position: absolute; width: 130px; height: 130px; margin: -65px 0 0 -65px; border-radius: 50%; background: rgba(255,255,255,0.12);
+  border: 2px solid rgba(255,255,255,0.35); display: none; pointer-events: none !important; }
+#joy-knob { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%; background: rgba(255,255,255,0.45); }
+#btns { position: absolute; right: calc(18px + env(safe-area-inset-right)); bottom: calc(min(52px, 9vw) + 24px); display: flex; flex-direction: column-reverse; align-items: center; gap: 12px; }
+.btn { width: 74px; height: 74px; border-radius: 50%; background: rgba(255,255,255,0.18); border: 2px solid rgba(255,255,255,0.45);
+  display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: bold; color: rgba(255,255,255,0.9); }
+.btn.small { width: 54px; height: 54px; font-size: 13px; }
+.btn.active { background: rgba(255,255,255,0.45); }
+#btn-down { display: none; }
+#btn-menu { position: absolute; right: calc(10px + env(safe-area-inset-right)); top: 10px; font-size: 18px; }
+body.desktop #btns, body.desktop #joy-base, body.desktop #btn-menu { display: none !important; }
+body.desktop .touch-only { display: none; }
+body:not(.desktop) .desktop-only { display: none; }
+#menu { position: fixed; inset: 0; background: rgba(10, 14, 30, 0.82); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; overflow-y: auto; }
+#menu.hidden { display: none; }
+#menu h1 { margin: 0; font-size: 44px; letter-spacing: 2px; text-shadow: 3px 3px 0 #2a6f2a, 6px 6px 0 #000; }
+#menu-status { min-height: 18px; color: #cde; }
+.menu-buttons { display: flex; gap: 12px; }
+#menu button { font-size: 20px; padding: 12px 28px; border: 2px solid #000; background: #7a7a7a; color: #fff; text-shadow: 1px 1px 0 #333;
+  box-shadow: inset -3px -3px 0 #555, inset 3px 3px 0 #aaa; cursor: pointer; font-family: inherit; }
+#menu button:active { background: #6a8; }
+#menu button:disabled { opacity: 0.5; }
+#menu label { display: flex; align-items: center; gap: 10px; font-size: 15px; }
+#menu input[type=range] { width: 180px; }
+.help { max-width: 640px; text-align: center; font-size: 13px; color: #bcd; line-height: 1.6; }
