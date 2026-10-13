@@ -58,6 +58,23 @@ Abra a pasta do projeto no Android Studio (AGP 8.5.2, Gradle 8.7, compileSdk 34)
 # APK em app/build/outputs/apk/release/app-release.apk
 ```
 
+## Versão para PC (Windows)
+
+`desktop/` empacota o mesmo jogo com Electron (Chromium embutido, WebGL 2 garantido).
+
+```bash
+cd desktop
+npm install
+npm start          # roda no PC atual (Windows, Linux ou macOS)
+npm run dist       # gera desktop/dist/VoxelCraft-HD.exe (portátil, Windows 64 bits)
+```
+
+O `.exe` é portátil: não precisa instalar, basta abrir. Controles: WASD, mouse, Espaço, Shift, F (voar),
+1-9 ou roda do mouse para escolher bloco, Esc para o menu e F11 ou Alt+Enter para tela cheia. Os saves
+ficam no perfil do Windows (`%APPDATA%\VoxelCraft`). O `.exe` não é assinado digitalmente, então o
+Windows SmartScreen pode avisar na primeira execução: clique em "Mais informações" e depois em
+"Executar assim mesmo".
+
 ## Testar no navegador
 
 ```bash
