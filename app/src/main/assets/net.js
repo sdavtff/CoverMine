@@ -168,6 +168,7 @@ function addRemote(p) {
 function setRemoteSkin(r, skin) { if (skin) r.model.setTexture(makeTexture(drawHumanoidSkin(skin))); if (r.tag) r.tag.material.map = nameTex(r.name); }
 function removeRemote(r) { if (r.model) G.scene.remove(r.model.group); }
 function renderRemotes(dt) {
+  G.remotePlayers = NET.players; // a iluminação usa para a tocha na mão dos outros jogadores
   for (const r of NET.players.values()) {
     const t = r.target, k = Math.min(1, dt * 10);
     const ox = r.x, oz = r.z;

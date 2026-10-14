@@ -18,6 +18,12 @@ export function frameInput() {
     sprint: !!(IN.sprintToggle || k.ControlLeft || k.ControlRight || (G.isTouch && Math.hypot(IN.jx, IN.jy) > 0.97)),
     jumpPressed: jump && !IN._jump, sneakPressed: sneak && !IN._sneak,
   };
+  // PC: dois toques rápidos em W ativam a corrida (até soltar W)
+  const fwd = !!(k.KeyW || k.ArrowUp), now = performance.now();
+  if (fwd && !IN._fwd) { if (now - (IN._fwdT || 0) < 280) IN.tapSprint = true; IN._fwdT = now; }
+  if (!fwd) IN.tapSprint = false;
+  IN._fwd = fwd;
+  if (IN.tapSprint) out.sprint = true;
   IN._jump = jump; IN._sneak = sneak;
   return out;
 }

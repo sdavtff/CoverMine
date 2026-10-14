@@ -20,6 +20,11 @@ multiplayer em rede local e atualização automática.
 | ![Noite](docs/screenshots/v3-noite.jpg) | ![Mapa](docs/screenshots/v3-mapa.jpg) |
 | ![Inventário](docs/screenshots/v3-inventario.jpg) | ![Criativo](docs/screenshots/v3-criativo.jpg) |
 
+## Novidades da 3.3.0
+
+- **Tocha na mão ilumina em volta**: segurar tocha, lâmpada, lava (balde), cristal ou fornalha acesa cria uma luz dinâmica que acompanha o jogador, com tremulação e acendimento suave. Funciona em todos os presets (inclusive no celular). No multiplayer, a tocha na mão dos 2 jogadores mais próximos também ilumina (com "Luzes dinâmicas" ligadas). Opção "Tocha na mão ilumina em volta" nas configurações gráficas.
+- **Jogabilidade**: pulo mais responsivo (dá para pular logo após sair da borda e o pulo apertado um pouco antes de tocar o chão é guardado), pulo correndo com impulso, corrida continua no ar, dois toques em W para correr (PC), controle no ar melhor, nado rápido (correr debaixo d'água segue o olhar) e impulso para sair da água pela borda.
+
 ## Novidades da 3.2.0
 
 - **Preset "Extremo (PC)"**: sombras em 3 cascatas de 4096 px até 170 blocos, SSAO com 16 amostras, até 8 luzes dinâmicas (2 com sombra), nuvens volumétricas reais, TAA, distância de visão 12 e resolução 150%.

@@ -1,7 +1,7 @@
 {
   "name": "voxelcraft",
   "productName": "VoxelCraft",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "description": "VoxelCraft HD - jogo de construção em blocos",
   "author": "VoxelCraft",
   "main": "main.js",

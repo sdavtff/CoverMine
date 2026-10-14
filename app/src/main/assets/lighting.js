@@ -8,11 +8,12 @@ import { G } from './state.js';
 import { SHADOW_LEVELS } from './graphics.js';
 import { EMIT, BLOCKS, B } from './blocks.js';
 import { CS, H } from './world.js';
+import { ITEMS } from './items.js';
 
 export const L = {
   csm: [], probe: null, points: [], splits: [], lightDir: new THREE.Vector3(0, 1, 0),
   dirty: true, frame: 0, groundAlbedo: new THREE.Color(0.42, 0.4, 0.3), groundT: 0, emitT: 0, emitters: [],
-  tileAvg: null, pointShadowT: 0,
+  tileAvg: null, pointShadowT: 0, held: [], heldK: [0, 0, 0],
 };
 
 // ---------------- criação ----------------
@@ -35,6 +36,13 @@ export function initLighting(scene) {
     p.shadow.bias = -0.004;
     scene.add(p);
     L.points.push(p);
+  }
+  // luz da tocha na mão: [0] = jogador local, [1..2] = outros jogadores (multiplayer)
+  for (let i = 0; i < 3; i++) {
+    const p = new THREE.PointLight(0xffaa55, 0, 13, 2);
+    p.visible = false;
+    scene.add(p);
+    L.held.push(p);
   }
   return L.csm[0];
 }
@@ -61,6 +69,9 @@ export function applyLighting() {
   });
   const n = eff.dynLights | 0;
   L.points.forEach((p, i) => { p.visible = i < n; p.intensity = 0; p.castShadow = (i === 0 || (i === 1 && n >= 8)) && n > 0 && !!eff.torchShadows; if (p.shadow.map && !p.castShadow) { p.shadow.map.dispose(); p.shadow.map = null; } });
+  // a luz da mão fica sempre ligada (exceto se desativada); as dos outros jogadores só com luzes dinâmicas
+  const hl = eff.heldLight !== false;
+  L.held.forEach((p, i) => { p.visible = hl && (i === 0 || n > 0); p.intensity = 0; });
   if (G.world) for (const c of G.world.chunks.values()) for (const m of [c.mesh, c.cut]) if (m) { m.castShadow = m.receiveShadow = renderer.shadowMap.enabled; }
   L.dirty = true;
 }
@@ -322,7 +333,49 @@ function chunkEmitters(c) {
   c.emitCache = { v: c.version, list };
   return list;
 }
+// cor/força da luz de um item segurado (null = não ilumina)
+const HELD_CACHE = {};
+export function heldLightOf(k) {
+  if (!k) return null;
+  if (HELD_CACHE[k] !== undefined) return HELD_CACHE[k];
+  const it = ITEMS[k];
+  let id = it ? (it.block || it.bucket) : 0, r = null;
+  if (id && (EMIT[id] || 0) >= 10) r = { id, col: emitColor(id), power: id === B.LAVA ? 4.2 : (EMIT[id] >= 14 ? 3.8 : 3.0), dist: id === B.LAVA ? 12 : 14 };
+  return (HELD_CACHE[k] = r);
+}
+// tocha (ou outra fonte de luz) na mão ilumina em volta, com tremulação e acendimento suave
+const _hp = new THREE.Vector3();
+function updateHeldLights(dt) {
+  const t = G.time || 0, mul = G.settings.light || 1;
+  const set = (i, info, x, y, z, yaw) => {
+    const p = L.held[i];
+    if (!p || !p.visible) return;
+    const target = info ? 1 : 0;
+    L.heldK[i] += (target - L.heldK[i]) * Math.min(1, dt * 8);
+    if (L.heldK[i] < 0.01) { p.intensity = 0; return; }
+    if (info) { p.color.setRGB(info.col[0], info.col[1], info.col[2]); p.distance = info.dist; p.userData.power = info.power; p.userData.flick = info.id !== B.LAMP && info.id !== B.CRYSTAL_ORE && info.id !== B.CRYSTAL_BLOCK; }
+    // à frente e à direita do corpo, na altura da mão (a luz não fica "dentro" da cabeça)
+    _hp.set(x + Math.cos(yaw) * 0.35 - Math.sin(yaw) * 0.45, y, z - Math.sin(yaw) * 0.35 - Math.cos(yaw) * 0.45);
+    p.position.lerp(_hp, p.intensity > 0 ? Math.min(1, dt * 20) : 1);
+    const f = p.userData.flick ? 0.85 + 0.09 * Math.sin(t * 10.1 + i * 2) + 0.06 * Math.sin(t * 25.3 + i) : 1;
+    p.intensity = (p.userData.power || 2.4) * f * L.heldK[i] * mul;
+  };
+  const pl = G.player;
+  if (pl && !pl.dead) {
+    const s = pl.held(), e = pl.eyePos();
+    set(0, heldLightOf(s && s.k), e.x, e.y - 0.35, e.z, pl.yaw);
+  } else set(0, null, 0, 0, 0, 0);
+  // outros jogadores: os 2 mais próximos que seguram uma fonte de luz
+  const rem = [];
+  if (G.remotePlayers && pl) for (const r of G.remotePlayers.values()) {
+    const info = heldLightOf(r.held);
+    if (info) rem.push([(r.x - pl.pos.x) ** 2 + (r.z - pl.pos.z) ** 2, r, info]);
+  }
+  rem.sort((a, b) => a[0] - b[0]);
+  for (let i = 1; i < 3; i++) { const q = rem[i - 1]; if (q) set(i, q[2], q[1].x, q[1].y + 1.2, q[1].z, q[1].yaw); else set(i, null, 0, 0, 0, 0); }
+}
 export function updateDynamicLights(dt) {
+  if (L.held.length) updateHeldLights(dt);
   const n = G.eff.dynLights | 0;
   if (!n || !G.world || !G.player) { for (const p of L.points) p.intensity = 0; return; }
   const w = G.world, pp = G.player.pos;

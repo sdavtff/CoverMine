@@ -29,7 +29,7 @@ export function defaultSettings(isTouch) {
     preset: isTouch ? 'medium' : 'ultra',
     light: 1, fog: true, fogDensity: 1, fpsCap: isTouch ? 60 : 0, eco: false, auto: true,
     sens: 1, fov: 75, volume: 0.8, uiScale: 1, invertY: false, minimap: true, showInfo: true, compass: true, viewBob: true,
-    reduceFlash: false, highContrast: false, name: 'Jogador', skin: null, camDefault: 0, autoUpdate: true, audio3d: true, texPack: 'pack', lastServer: '', lastRoom: '', netKey: '',
+    reduceFlash: false, highContrast: false, name: 'Jogador', skin: null, camDefault: 0, autoUpdate: true, audio3d: true, texPack: 'pack', heldLight: true, lastServer: '', lastRoom: '', netKey: '',
     bloom: true, vignette: true, grading: true,
   }, isTouch ? PRESETS.medium : PRESETS.high);
 }
@@ -98,6 +98,7 @@ const SCHEMA = [
   { key: 'ssao', label: 'Oclusão de ambiente (SSAO)', type: 'select', num: true, options: [[0, 'Desligada'], [1, 'Baixa'], [2, 'Alta'], [3, 'Extrema (16 amostras, PC)']], note: 'precisa de pós-processamento' },
   { key: 'dynLights', label: 'Luzes dinâmicas (tochas, lava)', type: 'select', num: true, options: [[0, 'Nenhuma'], [2, '2 mais próximas'], [4, '4 mais próximas'], [8, '8 mais próximas (PC)']] },
   { key: 'torchShadows', label: '  Sombras da tocha mais próxima', type: 'check' },
+  { key: 'heldLight', label: 'Tocha na mão ilumina em volta', type: 'check' },
   { key: 'godrays', label: 'Raios de sol (god rays)', type: 'check', note: 'precisa de pós-processamento' },
   { key: 'mat', label: 'Materiais', type: 'select', num: true, options: [[0, 'Simples'], [1, 'Médio (chuva molha, neve acumula, variação)'], [2, 'Alto (+ detalhe de perto, sombra das nuvens)'], [3, 'Ultra (+ relevo parallax)']] },
   { key: 'sky', label: 'Céu', type: 'select', num: true, options: [[0, 'Clássico'], [1, 'Físico (dispersão atmosférica)']], keepPreset: true },

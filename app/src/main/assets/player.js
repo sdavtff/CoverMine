@@ -120,27 +120,43 @@ export class Player {
     this.headInWater = head === B.WATER; this.headInLava = head === B.LAVA;
     const climbing = isClimbable(feet) || isClimbable(w.getBlock(fx, Math.floor(p.y + 1.2), fz));
     this.sneak = !!input.sneak && !this.fly;
-    const sprint = !!input.sprint && mag > 0.6 && this.hunger > 6 && !this.sneak;
+    // corrida continua no ar (pulo correndo) e para ao bater numa parede ou soltar o movimento
+    const wantSprint = !!input.sprint || (this.sprinting && !this.onGround && !this.hitWall);
+    const sprint = wantSprint && mag > 0.6 && this.hunger > 6 && !this.sneak;
     this.sprinting = sprint;
+    // tempo de "coiote" (ainda dá para pular logo após sair da borda) e pulo guardado (apertar um pouco antes de tocar o chão)
+    this.coyote = this.onGround ? 0.12 : Math.max(0, (this.coyote || 0) - dt);
+    this.jumpBuf = input.jumpPressed ? 0.15 : Math.max(0, (this.jumpBuf || 0) - dt);
     if (this.fly) {
       const sp = sprint ? 20 : 11;
       v.x = wx * sp; v.z = wz * sp;
       v.y = ((input.jump ? 1 : 0) - (input.sneak ? 1 : 0)) * sp;
     } else {
-      let sp = (this.inWater || this.inLava) ? 2.6 : sprint ? 5.8 : this.sneak ? 1.6 : 4.3;
+      const swimFast = this.inWater && sprint && this.headInWater;
+      let sp = swimFast ? 4.6 : (this.inWater || this.inLava) ? 2.6 : sprint ? 5.8 : this.sneak ? 1.6 : 4.3;
       if (BLOCKS[below] && BLOCKS[below].slow) sp *= 0.55;
       const slippery = BLOCKS[below] && BLOCKS[below].slippery;
-      const acc = this.onGround ? (slippery ? 2.5 : 18) : (this.inWater || this.inLava) ? 6 : 5;
+      // controle no ar um pouco maior: dá para corrigir o pulo sem perder o impulso
+      const acc = this.onGround ? (slippery ? 2.5 : 18) : (this.inWater || this.inLava) ? 6 : 7;
       v.x += (wx * sp - v.x) * Math.min(1, acc * dt);
       v.z += (wz * sp - v.z) * Math.min(1, acc * dt);
       if (this.inWater || this.inLava) {
         v.y -= 9 * dt; if (v.y < -3) v.y = -3;
+        // nado rápido (correndo debaixo d'água): segue a direção do olhar, inclusive para cima/baixo
+        if (swimFast) v.y += (Math.sin(this.pitch) * sp * Math.min(1, mag) - v.y) * Math.min(1, 6 * dt);
         if (input.jump) v.y = Math.min(v.y + 30 * dt, 3.6);
+        // sair da água na borda: impulso para subir no bloco
+        if (input.jump && this.hitWall && !this.headInWater) v.y = Math.max(v.y, 5.5);
       } else if (climbing) {
         v.y = input.jump || (mag > 0.1 && this.hitWall) ? 2.8 : input.sneak ? 0 : Math.max(v.y - 28 * dt, -2.5);
       } else {
         v.y -= 28 * dt; if (v.y < -50) v.y = -50;
-        if (input.jump && this.onGround) { v.y = 8.6; this.addExhaustion(sprint ? 0.2 : 0.05); }
+        if ((input.jump || this.jumpBuf > 0) && (this.onGround || this.coyote > 0) && v.y <= 0.5) {
+          v.y = 8.6; this.coyote = 0; this.jumpBuf = 0; this.onGround = false;
+          this.addExhaustion(sprint ? 0.2 : 0.05);
+          // pulo correndo: pequeno impulso para frente
+          if (sprint) { v.x += -sy * 1.4; v.z += -cy * 1.4; }
+        }
       }
     }
     // elevador: pular sobre o bloco leva ao próximo elevador acima; agachar, ao de baixo
