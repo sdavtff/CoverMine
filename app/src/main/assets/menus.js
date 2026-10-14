@@ -6,6 +6,7 @@ import { SKIN_PRESETS, drawHumanoidSkin, OUTFITS, HATS, importSkinFile } from '.
 import { VERSION } from './version.js';
 import { askText, askConfirm, showMessage } from './dialog.js';
 import { queryRooms } from './net.js';
+import { checkUpdates } from './update.js';
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, parent, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; if (parent) parent.appendChild(e); return e; };
@@ -142,6 +143,13 @@ export function showSettings(back) {
       chk('Textos grandes / alto contraste', 'highContrast');
       chk('Som 3D (fones: direção dos sons) e eco do ambiente', 'audio3d');
       chk('Atualizar o jogo automaticamente (com internet)', 'autoUpdate');
+      const ub = el('button', '', f, '🔄 Verificar atualizações agora');
+      ub.onclick = async () => {
+        ub.disabled = true; ub.textContent = 'Verificando...';
+        try { const v = await checkUpdates(true); hook('toast', v ? `Nova versão ${v} disponível — toque em "Atualizar agora".` : `Você já está na versão mais nova (${VERSION}).`); }
+        catch (e) { hook('toast', 'Sem conexão para verificar atualizações.'); }
+        ub.disabled = false; ub.textContent = '🔄 Verificar atualizações agora';
+      };
       // benchmark: mede o desempenho do preset atual num trajeto fixo (sem mexer nos mundos salvos)
       const bsec = el('div', 'mp-section', f);
       el('h3', '', bsec, 'Benchmark');

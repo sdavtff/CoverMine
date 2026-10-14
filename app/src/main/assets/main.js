@@ -31,6 +31,7 @@ import { NET, joinServer, netTick, netHitMob } from './net.js';
 import { askText, askChoice, showMessage } from './dialog.js';
 import { initAmbient, updateAmbient } from './ambient.js';
 import { updateWorldPhysics, explode, clearWorldPhysics, ignite } from './worldphys.js';
+import { initUpdates } from './update.js';
 import { PHOTO, enterPhoto, exitPhoto, photoCamera, photoAfterRender, BENCH, startBenchmark, benchCamera, benchBegin, benchEnd, benchResult, benchText } from './tools.js';
 G.net = NET;
 
@@ -70,6 +71,8 @@ async function boot() {
   setLoading('');
   await migrateLegacy().catch(() => null);
   showTitle();
+  initUpdates(toast);
+  window.__vcBeforeUpdate = () => (G.world && !NET.connected ? saveNow() : null);
   // retomar após reiniciar o renderizador (troca de antialiasing)
   try {
     const resume = sessionStorage.getItem('vc_resume');

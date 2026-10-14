@@ -389,7 +389,7 @@ export function renderFrame(drawScene, extra = {}) {
   // SSAO
   u.uAO.value = 0;
   if (P.depth && eff.ssao > 0 && !extra.noAO) {
-    const am = aoMaterial(eff.ssao >= 2 ? 12 : 6);
+    const am = aoMaterial(eff.ssao >= 3 ? 16 : eff.ssao >= 2 ? 12 : 6);
     am.uniforms.tDepth.value = P.sceneRT.depthTexture;
     am.uniforms.uProj.value.copy(cam.projectionMatrix);
     am.uniforms.uInvProj.value.copy(cam.projectionMatrixInverse);
@@ -400,7 +400,7 @@ export function renderFrame(drawScene, extra = {}) {
     aoBlur.uniforms.tSrc.value = P.aoA.texture; aoBlur.uniforms.uDir.value.set(1 / P.aoA.width, 0); pass(aoBlur, P.aoB);
     aoBlur.uniforms.tSrc.value = P.aoB.texture; aoBlur.uniforms.uDir.value.set(0, 1 / P.aoA.height); pass(aoBlur, P.aoA);
     u.tAO.value = P.aoA.texture;
-    u.uAO.value = eff.ssao >= 2 ? 0.85 : 0.7;
+    u.uAO.value = eff.ssao >= 3 ? 0.9 : eff.ssao >= 2 ? 0.85 : 0.7;
   }
   // sol na tela: raios e reflexos da lente
   u.uRays.value = 0; u.uSunOn.value = 0;

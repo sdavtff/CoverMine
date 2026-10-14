@@ -197,3 +197,6 @@ body.photo #hud, body.bench #hud > *:not(#info) { display: none !important; }
 .photo-cell { display: flex; flex-direction: column; gap: 4px; } .photo-cell img { width: 100%; border-radius: 6px; cursor: pointer; }
 .bench-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 6px; }
 .bench-table th, .bench-table td { border-bottom: 1px solid #445; padding: 3px 4px; text-align: left; }
+/* aviso de nova versão */
+#update-banner { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 60; display: flex; gap: 10px; align-items: center; padding: 8px 12px; border-radius: 8px; background: rgba(20,40,20,0.92); border: 1px solid #5c5; color: #fff; font-size: calc(14px * var(--ui)); max-width: calc(100vw - 32px); flex-wrap: wrap; justify-content: center; }
+#update-banner.hidden { display: none; }

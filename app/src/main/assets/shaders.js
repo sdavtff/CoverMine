@@ -37,6 +37,7 @@ export const U = {
   uPomScale: { value: 0.002 },
   uFogHeight: { value: 0 },    // nível de referência da neblina de vale
   uFogValley: { value: 0 },    // densidade da neblina baixa (mais forte de manhã)
+  uCloudBase: { value: 136 },  // altura da base das nuvens
 };
 
 // ---------------- GLSL comum: céu + neblina ----------------
@@ -201,7 +202,64 @@ export function makeCloudMaterial(quality) {
         return s;
       }
       float dens(vec2 p) { return smoothstep(uCover, uCover + 0.32, cfbm(p)); }
+      #if CLOUD_Q >= 3
+      // ---- nuvens volumétricas (PC): marcha de raio por uma camada de 34 blocos de espessura ----
+      uniform float uCloudBase;
+      float cheapFbm(vec2 p) { float s = 0.0, a = 0.5; mat2 m = mat2(1.6, 1.2, -1.2, 1.6); for (int i = 0; i < 4; i++) { s += a * vcN2(p); p = m * p; a *= 0.5; } return s; }
+      float vdens(vec3 p, vec2 wind) {
+        float h = (p.y - uCloudBase) / 34.0;
+        if (h < 0.0 || h > 1.0) return 0.0;
+        float base = smoothstep(uCover - 0.05, uCover + 0.3, cheapFbm(p.xz * 0.0042 + wind));
+        // perfil vertical: base reta, topo arredondado (cúmulos)
+        float prof = smoothstep(0.0, 0.12, h) * (1.0 - smoothstep(0.35 + base * 0.6, 1.0, h));
+        // erosão de detalhe (bordas "fofas")
+        float det = vcN2(p.xz * 0.035 + vec2(p.y * 0.06, -p.y * 0.04) + wind * 6.0);
+        return max(0.0, base * prof * 1.6 - det * 0.35 * (1.0 - base));
+      }
+      #endif
       void main() {
+        #if CLOUD_Q >= 3
+        {
+          vec3 V = normalize(vWorldP - cameraPosition);
+          if (V.y < 0.01 && cameraPosition.y < uCloudBase) discard;
+          vec2 wind = vec2(uTime * 0.0035, uTime * 0.0012);
+          float t0 = (uCloudBase - cameraPosition.y) / V.y, t1 = (uCloudBase + 34.0 - cameraPosition.y) / V.y;
+          if (t0 > t1) { float tt = t0; t0 = t1; t1 = tt; }
+          t0 = max(t0, 0.0);
+          float dist0 = t0 * length(V.xz);
+          if (t1 <= 0.0 || dist0 > 900.0) discard;
+          const int STEPS = 22;
+          float len = min(t1 - t0, 260.0), st = len / float(STEPS);
+          // deslocamento aleatório por pixel (o TAA/bloom suaviza o ruído e some com as faixas)
+          float jit = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+          float T = 1.0; vec3 acc = vec3(0.0);
+          vec3 L = normalize(uSunDir);
+          float phase = 0.6 + 0.8 * pow(max(dot(V, L), 0.0), 6.0);
+          for (int i = 0; i < STEPS; i++) {
+            vec3 p = cameraPosition + V * (t0 + (float(i) + jit) * st);
+            float d = vdens(p, wind);
+            if (d > 0.01) {
+              // luz: 3 passos em direção ao sol
+              float ld = 0.0;
+              for (int j = 1; j <= 3; j++) ld += vdens(p + L * float(j) * 7.0, wind);
+              float lit = exp(-ld * 1.4) * (1.0 - exp(-d * 2.0) * 0.5);
+              vec3 c = mix(uCloudShade, uCloudLit * phase, lit);
+              float a = 1.0 - exp(-d * st * 0.09);
+              acc += T * a * c; T *= 1.0 - a;
+              if (T < 0.03) break;
+            }
+          }
+          float alpha = 1.0 - T;
+          if (alpha < 0.01) discard;
+          vec3 col = acc / max(alpha, 1e-3);
+          // perspectiva aérea: nuvens longe somem no céu
+          col = mix(col, vcSky(V, 0.0), smoothstep(250.0, 850.0, dist0) * 0.8);
+          gl_FragColor = vec4(col, alpha * (1.0 - smoothstep(600.0, 900.0, dist0)));
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+          return;
+        }
+        #endif
         vec2 wind = vec2(uTime * 0.0035, uTime * 0.0012);
         vec2 p = vWorldP.xz * 0.0042 + wind;
         float d = dens(p);
@@ -435,6 +493,7 @@ uniform float uSnowCover;
 uniform vec3 uSnowCenter;
 uniform float uFlash;
 uniform float uCloudCover;
+uniform float uCloudBase;
 uniform float uPomScale;
 uniform vec3 uLightCol;
 uniform vec3 uLightDir;
@@ -443,7 +502,7 @@ vec3 vcFN = vec3(0.0, 1.0, 0.0);
 // sombra das nuvens: a mesma densidade do shader das nuvens, projetada pelo sol até o terreno
 float vcCloudShadow(vec3 P) {
   if (uLightDir.y < 0.05) return 1.0;
-  float ch = 112.0;
+  float ch = uCloudBase + 6.0;
   vec2 cp = P.xz + uLightDir.xz / uLightDir.y * (ch - P.y);
   vec2 p = cp * 0.0042 + vec2(uTime * 0.0035, uTime * 0.0012);
   float sum = 0.0, a = 0.5;

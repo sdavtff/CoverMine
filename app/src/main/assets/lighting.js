@@ -26,7 +26,7 @@ export function initLighting(scene) {
   }
   L.probe = new THREE.LightProbe();
   scene.add(L.probe);
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 8; i++) {
     const p = new THREE.PointLight(0xffaa55, 0, 12, 2);
     p.visible = false;
     p.shadow.autoUpdate = false;
@@ -60,7 +60,7 @@ export function applyLighting() {
     }
   });
   const n = eff.dynLights | 0;
-  L.points.forEach((p, i) => { p.visible = i < n; p.intensity = 0; p.castShadow = i === 0 && n > 0 && !!eff.torchShadows; if (p.shadow.map && !p.castShadow) { p.shadow.map.dispose(); p.shadow.map = null; } });
+  L.points.forEach((p, i) => { p.visible = i < n; p.intensity = 0; p.castShadow = (i === 0 || (i === 1 && n >= 8)) && n > 0 && !!eff.torchShadows; if (p.shadow.map && !p.castShadow) { p.shadow.map.dispose(); p.shadow.map = null; } });
   if (G.world) for (const c of G.world.chunks.values()) for (const m of [c.mesh, c.cut]) if (m) { m.castShadow = m.receiveShadow = renderer.shadowMap.enabled; }
   L.dirty = true;
 }
@@ -114,11 +114,10 @@ export function updateCascades(camera, lightDir, force, dt = 1 / 60) {
     }
   }
   // sombra da tocha mais próxima (atualiza ~10 vezes por segundo)
-  const p0 = L.points[0];
-  if (p0.castShadow && p0.intensity > 0) {
-    L.pointShadowT -= dt;
-    if (L.pointShadowT <= 0 || force) { L.pointShadowT = 0.1; p0.shadow.needsUpdate = true; any = true; }
-  }
+  L.pointShadowT -= dt;
+  const due = L.pointShadowT <= 0 || force;
+  if (due) L.pointShadowT = 0.1;
+  for (const p0 of L.points.slice(0, 2)) if (p0.castShadow && p0.intensity > 0 && due) { p0.shadow.needsUpdate = true; any = true; }
   L.dirty = false;
   renderer.shadowMap.needsUpdate = any;
 }
@@ -336,7 +335,7 @@ export function updateDynamicLights(dt) {
       if (!c || !c.data) continue;
       for (const e of chunkEmitters(c)) {
         const d2 = (e[0] - pp.x) ** 2 + (e[1] - pp.y - 1) ** 2 + (e[2] - pp.z) ** 2;
-        if (d2 < 196) all.push([d2, e]);
+        if (d2 < (n >= 8 ? 400 : 196)) all.push([d2, e]);
       }
     }
     all.sort((a, b) => a[0] - b[0]);

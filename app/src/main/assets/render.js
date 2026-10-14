@@ -117,7 +117,7 @@ async function loadPack() {
 }
 export async function loadTextures(T, onStatus) {
   const usePack = (G.eff && G.eff.texPack) !== 'proc';
-  const key = ATLAS_VERSION + '-' + T + (usePack ? '-pack1' : '');
+  const key = ATLAS_VERSION + '-' + T + (usePack ? '-pack2' : '');
   let atlas = null;
   try { atlas = await idbGet('cache', key); } catch (e) { atlas = null; }
   if (!atlas || !atlas.albedo || atlas.albedo.length !== atlas.width * atlas.height * 4) {
@@ -457,6 +457,7 @@ export function updateSky(weather = { rain: 0, storm: 0, flash: 0 }, under = 0) 
   U.uCloudCover.value = R.clouds.visible && R.cloudMat.uniforms.uCover ? R.cloudMat.uniforms.uCover.value : 2;
   R.sky.position.copy(G.camera.position);
   R.clouds.position.set(G.camera.position.x, 112 + (G.world ? G.world.sea - 22 : 0), G.camera.position.z);
+  U.uCloudBase.value = R.clouds.position.y;
   return qa;
 }
 

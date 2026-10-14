@@ -20,6 +20,14 @@ multiplayer em rede local e atualização automática.
 | ![Noite](docs/screenshots/v3-noite.jpg) | ![Mapa](docs/screenshots/v3-mapa.jpg) |
 | ![Inventário](docs/screenshots/v3-inventario.jpg) | ![Criativo](docs/screenshots/v3-criativo.jpg) |
 
+## Novidades da 3.2.0
+
+- **Preset "Extremo (PC)"**: sombras em 3 cascatas de 4096 px até 170 blocos, SSAO com 16 amostras, até 8 luzes dinâmicas (2 com sombra), nuvens volumétricas reais, TAA, distância de visão 12 e resolução 150%.
+- **Nuvens volumétricas reais** (opção "Volumétricas reais (PC)"): raymarching com 22 passos, luz do sol atravessando a nuvem, sombras das nuvens no chão alinhadas à altura delas.
+- **Texturas mais nítidas**: o pacote de texturas é ampliado com filtro bicúbico (Catmull-Rom) em vez de bilinear.
+- **PC começa no Ultra**: instalações novas no PC usam Ultra; quem estava em Alta sobe uma vez para Ultra (a qualidade automática reduz se o FPS cair).
+- **Atualização automática durante o jogo**: verifica a cada 20 minutos (e ao voltar para o app); mostra "Nova versão disponível — Atualizar agora" (salva o mundo e recarrega). Depois mostra "Jogo atualizado para a versão X". Botão "Verificar atualizações agora" em Configurações → Geral.
+
 ## Novidades da 3.1.2
 
 - **Texturas novas:** os blocos usam o pacote de texturas da imagem enviada (`app/src/main/assets/textures/pack.png`,

@@ -362,16 +362,24 @@ function GEN_HELPERS() { return { ihash, vnoise, fbm, worley, mixc, mulc, smooth
 const PACK_SKIP = new Set([41, 55, 56]);
 const PACK_KEEP_ALPHA = new Set([6, 20, 42]); // folhas: cor do pacote, furos do gerador procedural
 const PACK_KEY = new Set([11, 21, 22, 23, 35, 54, 57, 70, 76, 77, 84, 85, 86, 87, 92]); // fundo escuro vira transparente
+// amostragem bicúbica (Catmull-Rom): ampliar para 128 px fica nítido, sem o borrão do bilinear
+const cr = (t) => { const t2 = t * t, t3 = t2 * t; return [(-t3 + 2 * t2 - t) / 2, (3 * t3 - 5 * t2 + 2) / 2, (-3 * t3 + 4 * t2 + t) / 2, (t3 - t2) / 2]; };
 function packSample(pack, tile, u, v) {
   const cs = pack.cell, cx = (tile % pack.cols) * cs, cy = Math.floor(tile / pack.cols) * cs;
-  const fx = Math.min(cs - 1.001, Math.max(0, u * cs - 0.5)), fy = Math.min(cs - 1.001, Math.max(0, v * cs - 0.5));
-  const x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fx - x0, ty = fy - y0;
-  const px = (x, y) => ((cy + y) * pack.w + cx + x) * 4;
+  const fx = u * cs - 0.5, fy = v * cs - 0.5;
+  const x0 = Math.floor(fx), y0 = Math.floor(fy);
+  const wx = cr(fx - x0), wy = cr(fy - y0);
   const out = [0, 0, 0];
-  for (let k = 0; k < 3; k++) {
-    const a = pack.data[px(x0, y0) + k], b = pack.data[px(x0 + 1, y0) + k], c = pack.data[px(x0, y0 + 1) + k], d = pack.data[px(x0 + 1, y0 + 1) + k];
-    out[k] = (a * (1 - tx) + b * tx) * (1 - ty) + (c * (1 - tx) + d * tx) * ty;
+  for (let j = 0; j < 4; j++) {
+    // repete dentro da própria célula (texturas lado a lado sem costura)
+    const yy = cy + ((y0 - 1 + j) % cs + cs) % cs;
+    for (let i = 0; i < 4; i++) {
+      const xx = cx + ((x0 - 1 + i) % cs + cs) % cs;
+      const w = wx[i] * wy[j], o = (yy * pack.w + xx) * 4;
+      out[0] += pack.data[o] * w; out[1] += pack.data[o + 1] * w; out[2] += pack.data[o + 2] * w;
+    }
   }
+  for (let k = 0; k < 3; k++) out[k] = Math.max(0, Math.min(255, out[k]));
   return out;
 }
 function packAlpha(tile, c) {
