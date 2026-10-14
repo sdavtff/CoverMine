@@ -1,4 +1,4 @@
-# VoxelCraft HD 3.0
+# VoxelCraft HD 3.1
 
 Jogo sandbox de blocos para **Android** (WebView) e **PC** (Electron), feito em JavaScript com Three.js r160
 (a mesma versão do original). A versão 3.0 transforma o VoxelCraft num sandbox completo: mundo procedural
@@ -19,6 +19,44 @@ multiplayer em rede local e atualização automática.
 | ![Celular](docs/screenshots/v3-celular.jpg) | ![Chuva](docs/screenshots/v3-chuva.jpg) |
 | ![Noite](docs/screenshots/v3-noite.jpg) | ![Mapa](docs/screenshots/v3-mapa.jpg) |
 | ![Inventário](docs/screenshots/v3-inventario.jpg) | ![Criativo](docs/screenshots/v3-criativo.jpg) |
+
+## Novidades da 3.1
+
+**Skins:** 20 skins prontas (explorador, cavaleiro, astronauta, pirata, rei, rainha, mago, bombeira,
+robô, zumbi...), roupas (manga longa, listrada, camisa de time, jaleco, macacão, jardineira, armadura,
+túnica, vestido, rasgada), chapéus (boné, capacete, coroa, capuz, faixa, capacete com viseira), barba,
+óculos, cor de detalhe, skin aleatória, **importar PNG 64×64** (formato padrão de skins de jogos de blocos,
+inclusive o antigo 64×32; a camada externa é achatada) e exportar PNG. A prévia mostra frente e costas, e
+a skin aparece para os outros jogadores no multiplayer.
+
+**Multiplayer com salas de mundos diferentes:** o menu Multiplayer lista as salas do servidor, com
+cadeado, nome do mundo, modo, quem está jogando e quem é o dono. Para entrar, toque na sala. Para criar,
+dê um nome, uma senha opcional e escolha **mundo novo** (nome, semente, modo) ou **um dos seus mundos
+salvos**. Cada sala guarda o próprio mundo no servidor. Quem criou a sala é o dono (identificado por uma
+chave guardada no aparelho): pode bloquear construção, expulsar, trocar a senha e `/apagar` a sala. No
+PC, "Ligar servidor neste PC" abre o servidor embutido e mostra o endereço para os amigos.
+
+**Diálogos próprios:** renomear/excluir mundo, chat, senha e marcadores do mapa usavam `prompt()`/
+`alert()`, que **não aparecem na WebView do Android**. Agora tudo usa janelas do próprio jogo (o chat é
+uma caixa de texto na tela).
+
+**Realismo, em 8 etapas (cada efeito tem opção no painel e nível por preset):**
+
+| Etapa | O que entrou |
+|---|---|
+| 1. Iluminação | Sombras em cascata (até 3 mapas, estabilizadas e misturadas nas bordas), céu por dispersão atmosférica (Rayleigh + Mie + ozônio: entardecer laranja, hora azul), cor do sol pela atmosfera, luz ambiente por sonda de harmônicos esféricos com o rebote colorido do chão, luz das tochas com queda ~1/d² e tremulação, luzes dinâmicas nas 2–4 fontes mais próximas (lava avermelhada, cristal azul), sombra da tocha mais próxima (Ultra), SSAO em meia resolução, raios de sol (god rays), lua com fases e estrelas que giram |
+| 2. Materiais | Chuva molha (escurece, deixa brilhante, poças), neve acumula no topo dos blocos expostos, variação de cor em grande escala e sujeira nos cantos, detalhe de alta frequência de perto, relevo parallax (Ultra), sombra das nuvens no chão |
+| 3. Água e atmosfera | Ondas de Gerstner (vértice e normal), absorção por profundidade (Beer-Lambert), neblina de vale (mais densa de madrugada e depois da chuva), neblina subaquática com absorção por cor, gotas de chuva na tela, relâmpago iluminando a cena |
+| 4. Vegetação e vida | Plantas se afastam quando o jogador passa, folhas translúcidas contra o sol, folhas caindo das copas, vaga-lumes à noite, poeira/pólen no ar, brasas perto de lava e fornalhas, bando de pássaros, borboletas |
+| 5. Câmera e pós | Exposição automática (o olho se adapta entre caverna e céu aberto), TAA, desfoque de movimento da câmera, profundidade de campo, reflexos do sol na lente (só se o sol estiver visível), aberração cromática, granulação, bloom com limiar físico |
+| 6. Animação | Criatura tomba ao morrer, respiração, inclinação ao correr, cabeça que acompanha o jogador, degraus suaves, impacto ao pousar, balanço lateral da câmera, inércia da mão, tremor em explosões |
+| 7. Som | Som 3D (HRTF) para criaturas e trovões, eco por ambiente (caverna, floresta, aberto), oclusão por blocos, passos na água, chuva abafada sob telhado, vento mais forte no alto e na tempestade |
+| 8. Física e mundo | Água e lava escorrem com níveis (fonte, corrente, cachoeira, secam sem fonte; água infinita), lava + água vira pedra/pedregulho, fogo que se espalha e é apagado pela chuva, isqueiro de pederneira, TNT (fogo, isqueiro ou circuito) com destruição, destroços, dano e empurrão, areia e cascalho caem como entidade, barcos balançam; **gerador de terreno 4** (mundos novos) com vales de erosão, falésias, estalactites/estalagmites e cipós |
+
+**Modo foto** (tecla P ou Pausa → Modo foto): esconde a HUD, câmera livre, qualidade máxima temporária,
+foco (profundidade de campo), mudar a hora, captura em PNG (no PC baixa o arquivo; no celular fica na
+galeria do modo foto). **Benchmark** (Configurações → Geral): voa 20 s num trajeto fixo e mostra FPS
+médio, 1% mais lentos e tempo de GPU (quando o aparelho permite), com histórico para comparar.
 
 ## O que foi implementado (e está funcionando)
 
@@ -86,7 +124,7 @@ avisa. O mundo da versão anterior é migrado automaticamente.
 **Mapa:** coordenadas, bússola, minimapa, mapa do mundo com zoom e arraste (pinça no celular), regiões
 exploradas, marcadores próprios, aldeias e local da morte.
 
-**Personalização:** nome, 6 skins prontas, cores de pele, cabelo, olhos, camisa, calça e sapatos,
+**Personalização:** nome, 20 skins prontas, roupas, chapéus e importação de PNG (veja Novidades), e ainda cores de pele, cabelo, olhos, camisa, calça e sapatos,
 estilo de cabelo e prévia. O **braço do personagem aparece em 1ª pessoa** com a skin escolhida e o
 item na mão, e a 3ª pessoa mostra o modelo completo (V/F5 ou botão 👁 alterna 1ª, 3ª por trás e 3ª pela
 frente). Também há sensibilidade, FOV, inverter eixo, tamanho da interface, alto contraste e redução
@@ -140,6 +178,30 @@ Presets **Baixa / Média / Alta / Ultra** (ou Personalizada), aplicados na hora 
 | Partículas | Densidade de 0 a 150% |
 | Antialiasing, resolução | MSAA; escala de 50% a 200% |
 | Limite de FPS, modo economia, ajuste automático | Para celulares mais fracos |
+| Sombras do sol | Desligadas / 1 mapa / 2 cascatas / 3 cascatas 1024 / 3 cascatas 2048 |
+| SSAO, luzes dinâmicas, sombra da tocha, raios de sol | Oclusão de ambiente em tela, 0/2/4 luzes, sombra da fonte mais próxima |
+| Materiais | Simples / Médio (chuva, neve, variação) / Alto (+ detalhe, sombra de nuvens) / Ultra (+ parallax) |
+| Céu | Clássico ou físico (dispersão atmosférica) |
+| Pós avançado | Exposição automática, TAA, desfoque de movimento, profundidade de campo, reflexos de lente, gotas na tela, aberração cromática, granulação |
+
+**O que cada preset liga (novos efeitos):**
+
+| Efeito | Baixa | Média (padrão no celular) | Alta (padrão no PC) | Ultra |
+|---|---|---|---|---|
+| Sombras | — | 1 mapa 1024 | 3 cascatas 1024 | 3 cascatas 2048 |
+| SSAO | — | — | baixa | alta |
+| Luzes dinâmicas | — | — | 2 | 4 + sombra da tocha |
+| Raios de sol, reflexos de lente | — | — | sim | sim |
+| Materiais | simples | médio | alto | ultra (parallax) |
+| Exposição automática, gotas na tela | — | sim | sim | sim |
+| Aberração cromática, granulação | — | — | — | sim |
+| TAA, desfoque de movimento, profundidade de campo | opcional | opcional | opcional | opcional |
+
+**Custo estimado por efeito em celular intermediário** (não medido em aparelho: use o benchmark):
+sombras em 3 cascatas 1024 ≈ 1,5–2,5 ms, 3×2048 ≈ 3–4 ms; SSAO ≈ 1,5–3 ms; raios de sol ≈ 0,4–0,8 ms;
+2–4 luzes dinâmicas ≈ 0,5–1 ms; sombra da tocha ≈ 2–4 ms; materiais Alto ≈ 0,5–1 ms (Ultra + parallax
+≈ 1 ms); exposição automática ≈ 0,1 ms; TAA ≈ 0,5–1 ms; desfoque de movimento ≈ 1 ms; profundidade de
+campo ≈ 1–1,5 ms; céu físico e sonda de luz ≈ 0 na GPU (calculados na CPU só quando o sol anda).
 
 ## Estrutura do código
 
@@ -153,6 +215,11 @@ app/src/main/assets/               o jogo (mesmos arquivos no APK, no EXE e na C
   world.js, mesher.js       chunks, edições, luz voxel e geração de malha (também usado no worker)
   textures.js, textures2.js, atlas-worker.js   texturas procedurais (albedo, normal, rugosidade/AO)
   render.js, shaders.js, postfx.js   renderizador, céu, água, sombras, pós-processamento
+  lighting.js    sombras em cascata, céu físico, sonda de luz ambiente, luzes dinâmicas (3.1)
+  ambient.js     vaga-lumes, poeira, folhas caindo, brasas, pássaros e borboletas (3.1)
+  worldphys.js   água/lava escorrendo, fogo, explosões (3.1)
+  tools.js       modo foto e benchmark (3.1)
+  dialog.js      diálogos próprios (substituem prompt/alert na WebView) (3.1)
   physics.js, player.js     colisão por caixas, raycast, jogador e sobrevivência
   items.js, crafting.js, icons.js   itens, inventário, receitas, fornalha, ícones
   gameplay.js     quebrar/colocar/usar blocos, baús, fornalhas, plantas, ticks
@@ -242,6 +309,14 @@ Todos passaram sem erros no console:
   as criaturas aparecem nos dois e o convidado vira anfitrião quando o primeiro sai.
 - **App de PC (Electron no Linux):** "Hospedar sala" inicia o servidor embutido e um cliente externo
   entra na sala.
+- **3.1:** todos os presets (Baixa, Média, Alta, Ultra e Ultra com TAA + desfoque + profundidade de
+  campo) compilam e desenham sem erros de shader; modo foto captura PNG; servidor com **29/29**
+  verificações (lista de salas, mundos diferentes por sala, nome repetido recusado, sala apagada pelo
+  dono, dono reabre com outro mundo); dois navegadores criando salas diferentes (sementes 12345 e 999,
+  sobrevivência e criativo) e um terceiro entrando pela lista; skins: 20 prontas, importação de PNG
+  válida e recusa de imagem inválida; física: água escorre com níveis 0→7, seca sem a fonte, cai em
+  cachoeira, lava + água vira pedra, fogo consome tábuas, areia cai e pousa, TNT destrói 53 de 75 pedras;
+  gerador 4 gera estalactites e vales sem mudar o gerador 3 dos mundos existentes.
 - **Atualização automática (simulada):** manifesto e CDN interceptados. A versão 3.0.1 "remota" é
   carregada, inclusive os workers; quando a primeira CDN falha, a reserva assume; sem internet, abre a
   versão local.
@@ -258,8 +333,20 @@ Todos passaram sem erros no console:
   não há servidor público hospedado). Itens dropados e projéteis são locais de cada jogador. O
   inventário fica no cliente e o servidor só guarda uma cópia (não há validação de crafting). Baús e
   fornalhas não são sincronizados entre jogadores.
-- A água não escorre (é estática como na versão original) e não há redstone com atraso (repetidores).
-- Neve só cai nos biomas frios. Não há acúmulo de neve em camadas.
+- **Efeitos 3.1 sem medição em celular:** os custos acima são estimativas. Neste ambiente de teste
+  (renderização por software) o jogo roda a poucos quadros por segundo em qualquer preset, então não
+  dá para afirmar que Alta chega a 60 FPS num Snapdragon 7 — rode o benchmark no aparelho.
+- **Não implementado da lista de realismo:** reflexo em espaço de tela (a água usa reflexo planar no
+  Ultra e o céu nos outros), refração na água, nuvens volumétricas com raymarch e reprojeção (as nuvens
+  continuam 2D com sombreamento, agora projetando sombra), desfoque de movimento por objeto (só da
+  câmera), IK de pés, ragdoll com física (a criatura tomba numa animação), pássaros/peixes com IA
+  (pássaros e borboletas são decorativos), erosão hidráulica simulada (o gerador 4 usa ruído que imita
+  vales de erosão), cor diferente por fonte de luz no flood fill (a cor vem das luzes dinâmicas).
+- TAA pode deixar rastro em criaturas que se movem rápido (a reprojeção considera só a câmera); fica
+  desligado nos presets.
+- A água que escorre só é simulada pelo anfitrião/jogo solo; mexer perto de um oceano pode inundar
+  túneis (como no jogo original de blocos). Não há redstone com atraso (repetidores).
+- Neve acumulada é um efeito visual perto do jogador (não vira bloco).
 - Sem sons gravados: os efeitos são sintetizados (WebAudio).
 - O `.exe` não é assinado digitalmente (o SmartScreen avisa na primeira vez) e não tem ícone próprio.
 - A chave do APK é a de `tools/voxelcraft.keystore`. Instalar por cima da versão original da outra

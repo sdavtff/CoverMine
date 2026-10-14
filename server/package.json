@@ -1,6 +1,6 @@
 {
   "name": "voxelcraft-server",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Servidor multiplayer do VoxelCraft (WebSocket)",
   "main": "server.js",
   "private": true,

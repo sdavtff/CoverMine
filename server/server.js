@@ -17,7 +17,7 @@ const path = require('path');
 const os = require('os');
 const { WebSocketServer } = require('ws');
 
-const BLOCK_COUNT = 82;
+const BLOCK_COUNT = 86;
 const REACH = 10; // blocos (o jogo usa 5–6; folga para latência)
 const RATE = 40; // edições por segundo
 const MAX_MSG = 4 * 1024 * 1024;
@@ -97,7 +97,7 @@ function startServer(opts = {}) {
     room.world = {
       name: clean(up.name, 40) || room.world.name || 'Mundo de ' + room.name,
       seed: Number.isFinite(up.seed) ? up.seed | 0 : room.world.seed,
-      gen: [1, 2, 3].includes(up.gen) ? up.gen : 3,
+      gen: [1, 2, 3, 4].includes(up.gen) ? up.gen : 3,
       mode: ['survival', 'creative', 'peaceful', 'challenge'].includes(up.mode) ? up.mode : 'survival',
       edits: {}, time: Number.isFinite(up.time) ? up.time : 0.3, weather: up.weather || 'clear',
     };
