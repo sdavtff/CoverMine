@@ -103,13 +103,27 @@ function makeDataTex(data) {
   return t;
 }
 // gera (em worker, com cache no IndexedDB) e aplica o atlas
+// pacote de texturas em imagem (textures/pack.png): 16×6 células na ordem dos tiles
+async function loadPack() {
+  try {
+    const url = new URL('./textures/pack.png', import.meta.url);
+    const blob = await (await fetch(url)).blob();
+    const bmp = await createImageBitmap(blob);
+    const cv = document.createElement('canvas'); cv.width = bmp.width; cv.height = bmp.height;
+    const ctx = cv.getContext('2d'); ctx.drawImage(bmp, 0, 0);
+    const d = ctx.getImageData(0, 0, bmp.width, bmp.height);
+    return { data: d.data, w: bmp.width, h: bmp.height, cols: 16, rows: 6, cell: bmp.width / 16 };
+  } catch (e) { console.warn('pacote de texturas indisponível', e); return null; }
+}
 export async function loadTextures(T, onStatus) {
-  const key = ATLAS_VERSION + '-' + T;
+  const usePack = (G.eff && G.eff.texPack) !== 'proc';
+  const key = ATLAS_VERSION + '-' + T + (usePack ? '-pack1' : '');
   let atlas = null;
   try { atlas = await idbGet('cache', key); } catch (e) { atlas = null; }
   if (!atlas || !atlas.albedo || atlas.albedo.length !== atlas.width * atlas.height * 4) {
     onStatus && onStatus('Gerando texturas...');
-    atlas = await buildAtlasAsync(T);
+    const pack = usePack ? await loadPack() : null;
+    atlas = await buildAtlasAsync(T, pack);
     idbSet('cache', key, atlas).catch(() => {});
   }
   R.atlas = atlas;
@@ -123,18 +137,18 @@ export async function loadTextures(T, onStatus) {
   if (G.world) G.world.setUV(R.uv);
   hook('texturesChanged');
 }
-function buildAtlasAsync(T) {
+function buildAtlasAsync(T, pack) {
   return new Promise((resolve) => {
     try {
       const url = new URL('./atlas-worker.js', import.meta.url);
       const w = url.origin !== location.origin
         ? new Worker(URL.createObjectURL(new Blob([`import ${JSON.stringify(url.href)};`], { type: 'text/javascript' })), { type: 'module' })
         : new Worker(url, { type: 'module' });
-      const timer = setTimeout(() => { w.terminate(); resolve(buildAtlas(T)); }, 60000);
+      const timer = setTimeout(() => { w.terminate(); resolve(buildAtlas(T, null, pack)); }, 60000);
       w.onmessage = (e) => { clearTimeout(timer); w.terminate(); resolve(e.data); };
-      w.onerror = () => { clearTimeout(timer); w.terminate(); resolve(buildAtlas(T)); };
-      w.postMessage({ T });
-    } catch (e) { resolve(buildAtlas(T)); }
+      w.onerror = () => { clearTimeout(timer); w.terminate(); resolve(buildAtlas(T, null, pack)); };
+      w.postMessage({ T, pack });
+    } catch (e) { resolve(buildAtlas(T, null, pack)); }
   });
 }
 
@@ -188,8 +202,8 @@ export async function applyGraphics(key) {
   const prev = G.eff || {};
   const eff = G.eff = effective(G.settings);
   const all = key === undefined;
-  if (all || prev.tex !== eff.tex) await loadTextures(eff.tex);
-  if (all || prev.tex !== eff.tex || prev.normalMaps !== eff.normalMaps || prev.pbr !== eff.pbr || prev.mat !== eff.mat) makeTerrainMaterials();
+  if (all || prev.tex !== eff.tex || prev.texPack !== eff.texPack) await loadTextures(eff.tex);
+  if (all || prev.tex !== eff.tex || prev.texPack !== eff.texPack || prev.normalMaps !== eff.normalMaps || prev.pbr !== eff.pbr || prev.mat !== eff.mat) makeTerrainMaterials();
   if (all || prev.water !== eff.water) {
     if (eff.water >= 3 && !R.reflRT) {
       const s = new THREE.Vector2(); G.renderer.getDrawingBufferSize(s);
@@ -204,7 +218,7 @@ export async function applyGraphics(key) {
   if (!all && prev.veg !== eff.veg) rebuildAllChunks();
   if (all || prev.res !== eff.res) resize();
   if (all || prev.shadows !== eff.shadows || prev.dynLights !== eff.dynLights || prev.torchShadows !== eff.torchShadows) applyLighting();
-  if (all || prev.tex !== eff.tex) resetGroundCache();
+  if (all || prev.tex !== eff.tex || prev.texPack !== eff.texPack) resetGroundCache();
   if (all || prev.envMap !== eff.envMap) { R.envAngle = -99; if (!eff.envMap) { G.scene.environment = null; if (R.envRT) { R.envRT.dispose(); R.envRT = null; } } }
   if (all || prev.rd !== eff.rd) R.needKey = '';
   U.uCaustics.value = eff.water >= 2 ? 1 : 0;

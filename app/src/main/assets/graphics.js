@@ -26,7 +26,7 @@ export function defaultSettings(isTouch) {
     preset: isTouch ? 'medium' : 'high',
     light: 1, fog: true, fogDensity: 1, fpsCap: isTouch ? 60 : 0, eco: false, auto: true,
     sens: 1, fov: 75, volume: 0.8, uiScale: 1, invertY: false, minimap: true, showInfo: true, compass: true, viewBob: true,
-    reduceFlash: false, highContrast: false, name: 'Jogador', skin: null, camDefault: 0, autoUpdate: true, audio3d: true, lastServer: '', lastRoom: '', netKey: '',
+    reduceFlash: false, highContrast: false, name: 'Jogador', skin: null, camDefault: 0, autoUpdate: true, audio3d: true, texPack: 'pack', lastServer: '', lastRoom: '', netKey: '',
     bloom: true, vignette: true, grading: true,
   }, isTouch ? PRESETS.medium : PRESETS.high);
 }
@@ -83,6 +83,7 @@ export function applyPreset(s, name) {
 // ---------------- painel ----------------
 const SCHEMA = [
   { key: 'preset', label: 'Qualidade gráfica', type: 'select', options: [['low', 'Baixa'], ['medium', 'Média'], ['high', 'Alta'], ['ultra', 'Ultra'], ['custom', 'Personalizada']] },
+  { key: 'texPack', label: 'Pacote de texturas', type: 'select', keepPreset: true, options: [['pack', 'Novo (imagem)'], ['proc', 'Procedural (original)']] },
   { key: 'tex', label: 'Qualidade das texturas', type: 'select', num: true, options: [[32, 'Baixa (32 px)'], [64, 'Média (64 px + relevo)'], [128, 'Alta (128 px + relevo)']] },
   { key: 'rd', label: 'Distância de renderização', type: 'range', min: 2, max: 12, step: 1, fmt: (v) => `${v} chunks (${v * 16} blocos)` },
   { key: 'shadows', label: 'Sombras do sol', type: 'select', num: true, options: [[0, 'Desligadas'], [1, 'Baixa (1 mapa)'], [2, 'Média (2 cascatas)'], [3, 'Alta (3 cascatas 1024)'], [4, 'Ultra (3 cascatas 2048)']] },

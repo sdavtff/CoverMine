@@ -381,7 +381,8 @@ export function makeWaterMaterial(quality, reflTex) {
         #include <colorspace_fragment>
       }`,
     transparent: true,
-    depthWrite: false,
+    // grava profundidade: SSAO, raios, TAA e desfoque usam a superfície da água (e não o fundo visto através dela)
+    depthWrite: true,
     side: THREE.DoubleSide,
     fog: false,
   });

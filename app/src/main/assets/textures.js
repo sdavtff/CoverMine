@@ -357,7 +357,32 @@ function GEN_HELPERS() { return { ihash, vnoise, fbm, worley, mixc, mulc, smooth
 
 // ---------------- atlas ----------------
 // tileSize: 32 / 64 / 128 pixels. Cada célula tem 1,5×tileSize (margem de tileSize/4 em cada lado).
-export function buildAtlas(tileSize, onlyTiles) {
+// ---------- pacote de texturas (imagem 16×6 na mesma ordem dos tiles) ----------
+// tiles do pacote que não são usados: abóbora no topo da acácia (41), portas (55, 56) e células vazias (94+)
+const PACK_SKIP = new Set([41, 55, 56]);
+const PACK_KEEP_ALPHA = new Set([6, 20, 42]); // folhas: cor do pacote, furos do gerador procedural
+const PACK_KEY = new Set([11, 21, 22, 23, 35, 54, 57, 70, 76, 77, 84, 85, 86, 87, 92]); // fundo escuro vira transparente
+function packSample(pack, tile, u, v) {
+  const cs = pack.cell, cx = (tile % pack.cols) * cs, cy = Math.floor(tile / pack.cols) * cs;
+  const fx = Math.min(cs - 1.001, Math.max(0, u * cs - 0.5)), fy = Math.min(cs - 1.001, Math.max(0, v * cs - 0.5));
+  const x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fx - x0, ty = fy - y0;
+  const px = (x, y) => ((cy + y) * pack.w + cx + x) * 4;
+  const out = [0, 0, 0];
+  for (let k = 0; k < 3; k++) {
+    const a = pack.data[px(x0, y0) + k], b = pack.data[px(x0 + 1, y0) + k], c = pack.data[px(x0, y0 + 1) + k], d = pack.data[px(x0 + 1, y0 + 1) + k];
+    out[k] = (a * (1 - tx) + b * tx) * (1 - ty) + (c * (1 - tx) + d * tx) * ty;
+  }
+  return out;
+}
+function packAlpha(tile, c) {
+  const mx = Math.max(c[0], c[1], c[2]), mn = Math.min(c[0], c[1], c[2]);
+  const lum = c[0] * 0.3 + c[1] * 0.59 + c[2] * 0.11;
+  if (tile === 11) return lum < 55 ? 0 : 1; // vidro: centro escuro é transparente
+  // fundo de pedra escura (pouca saturação) → transparente; planta/metal/madeira ficam
+  return mx - mn < 34 && lum < 108 ? 0 : 1;
+}
+
+export function buildAtlas(tileSize, onlyTiles, pack) {
   const T = tileSize, G = T / 4, C = T + G * 2;
   const W = ATLAS_COLS * C, H = ATLAS_ROWS * C;
   const albedo = new Uint8Array(W * H * 4);
@@ -379,6 +404,21 @@ export function buildAtlas(tileSize, onlyTiles) {
       tA[i] = r[0]; tA[i + 1] = r[1]; tA[i + 2] = r[2]; tA[i + 3] = r[3];
       tH[y * T + x] = r[4];
       if (r[3] > 0.5) { ar += r[0]; ag += r[1]; ab += r[2]; an++; }
+    }
+    // pacote de imagem: substitui as cores (e recalcula a altura pelo brilho)
+    if (pack && tile < pack.cols * pack.rows && !PACK_SKIP.has(tile)) {
+      ar = ag = ab = an = 0;
+      for (let y = 0; y < T; y++) for (let x = 0; x < T; x++) {
+        const i = (y * T + x) * 4;
+        const c = packSample(pack, tile, (x + 0.5) / T, (y + 0.5) / T);
+        let a = tA[i + 3];
+        if (PACK_KEY.has(tile)) a = packAlpha(tile, c);
+        else if (!PACK_KEEP_ALPHA.has(tile)) a = 1;
+        tA[i] = c[0]; tA[i + 1] = c[1]; tA[i + 2] = c[2]; tA[i + 3] = a;
+        const lum = (c[0] * 0.3 + c[1] * 0.59 + c[2] * 0.11) / 255;
+        tH[y * T + x] = tH[y * T + x] * 0.3 + lum * 0.7;
+        if (a > 0.5) { ar += c[0]; ag += c[1]; ab += c[2]; an++; }
+      }
     }
     const mean = an ? [ar / an, ag / an, ab / an] : [128, 128, 128];
     avg[tile] = [mean[0] / 255, mean[1] / 255, mean[2] / 255];

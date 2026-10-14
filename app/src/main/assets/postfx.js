@@ -110,7 +110,8 @@ const compMat = mk(ACES + /* glsl */`
     if (uAutoExp > 0.0) {
       // adaptação do olho: caverna clareia aos poucos, céu aberto escurece
       float avg = texture2D(tAdapt, vec2(0.5)).r * 4.0;
-      ex *= clamp(0.34 / max(avg, 0.005), 0.55, 2.6);
+      // alvo calibrado na média típica de um dia claro (~0,22): de dia fica neutro; cavernas clareiam até 1,8×
+      ex *= clamp(0.22 / max(avg, 0.005), 0.7, 1.8);
     }
     vec3 col;
     if (uLDR > 0.5) col = c;

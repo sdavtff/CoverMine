@@ -1,4 +1,4 @@
-# VoxelCraft HD 3.1.1
+# VoxelCraft HD 3.1.2
 
 Jogo sandbox de blocos para **Android** (WebView) e **PC** (Electron), feito em JavaScript com Three.js r160
 (a mesma versão do original). A versão 3.0 transforma o VoxelCraft num sandbox completo: mundo procedural
@@ -19,6 +19,17 @@ multiplayer em rede local e atualização automática.
 | ![Celular](docs/screenshots/v3-celular.jpg) | ![Chuva](docs/screenshots/v3-chuva.jpg) |
 | ![Noite](docs/screenshots/v3-noite.jpg) | ![Mapa](docs/screenshots/v3-mapa.jpg) |
 | ![Inventário](docs/screenshots/v3-inventario.jpg) | ![Criativo](docs/screenshots/v3-criativo.jpg) |
+
+## Novidades da 3.1.2
+
+- **Texturas novas:** os blocos usam o pacote de texturas da imagem enviada (`app/src/main/assets/textures/pack.png`,
+  16×6 células na ordem dos tiles do jogo). O relevo é calculado a partir da própria imagem; plantas, tochas,
+  escadas, trilhos, fios e vidro têm o fundo escuro removido. Ficaram com a textura procedural: topo da acácia
+  (a célula trazia uma abóbora), portas e os blocos novos da 3.1 (fogo, TNT, estalactite, cipó), que não estão
+  na imagem. Dá para voltar às texturas antigas em Configurações Gráficas → Pacote de texturas.
+- **Reflexos corrigidos:** a água agora grava profundidade, então SSAO, raios de sol, TAA e desfoque não
+  desenham mais os blocos do fundo por cima da superfície (o padrão de "cubos brancos"), e a exposição
+  automática foi recalibrada (antes clareava a cena inteira em ~1,6×).
 
 ## Novidades da 3.1
 
