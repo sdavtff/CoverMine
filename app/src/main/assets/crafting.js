@@ -65,6 +65,9 @@ shapeless(['spruce_log'], ['spruce_planks', 4]);
 shaped(['P', 'P'], { P: '#planks' }, ['stick', 4]);
 shaped(['PP', 'PP'], { P: '#planks' }, ['crafting_table', 1]);
 shaped(['C', 'S'], { C: 'coal', S: 'stick' }, ['torch', 4]);
+// fogo e explosivos
+shapeless(['iron_ingot', 'flint'], ['flint_and_steel', 1]);
+shaped(['SCS', 'CSC', 'SCS'], { S: 'sand', C: 'coal' }, ['tnt', 1]);
 shaped(['PPP', 'P P', 'PPP'], { P: '#planks' }, ['chest', 1], { big: true });
 shaped(['CCC', 'C C', 'CCC'], { C: 'cobble' }, ['furnace', 1], { big: true });
 shaped(['PSP', 'PSP'], { P: '#planks', S: 'stick' }, ['fence', 3], { big: true });

@@ -431,7 +431,7 @@ export function openVillager(mob) {
 
 // morte
 export function showDeath(source, onRespawn) {
-  const msgs = { fall: 'Você caiu de muito alto.', lava: 'Você tentou nadar na lava.', drown: 'Você se afogou.', starve: 'Você morreu de fome.', cactus: 'Você abraçou um cacto.', mob: 'Você foi derrotado por uma criatura.', arrow: 'Você foi atingido por uma flecha.', void: 'Você caiu para fora do mundo.' };
+  const msgs = { fall: 'Você caiu de muito alto.', lava: 'Você tentou nadar na lava.', drown: 'Você se afogou.', starve: 'Você morreu de fome.', cactus: 'Você abraçou um cacto.', mob: 'Você foi derrotado por uma criatura.', arrow: 'Você foi atingido por uma flecha.', void: 'Você caiu para fora do mundo.', fire: 'Você pegou fogo.', explosion: 'Você explodiu junto com a TNT.' };
   const d = $('death');
   d.querySelector('p').textContent = msgs[source] || 'Você morreu.';
   d.classList.add('open');

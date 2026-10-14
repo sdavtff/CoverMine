@@ -1,10 +1,10 @@
 // Configurações gráficas do VoxelCraft: presets, persistência e painel de interface.
 
 export const PRESETS = {
-  low:    { tex: 32,  rd: 3, shadows: 0, water: 0, veg: 1, aa: false, clouds: 1, res: 0.75, post: 0, particles: 0.5, ssao: 0, dynLights: 0, torchShadows: false, godrays: false, sky: 1 },
-  medium: { tex: 64,  rd: 5, shadows: 1, water: 1, veg: 2, aa: false, clouds: 1, res: 1, post: 1, particles: 0.8, ssao: 0, dynLights: 0, torchShadows: false, godrays: false, sky: 1 },
-  high:   { tex: 64,  rd: 6, shadows: 3, water: 2, veg: 3, aa: true,  clouds: 2, res: 1.25, post: 2, particles: 1, ssao: 1, dynLights: 2, torchShadows: false, godrays: true, sky: 1 },
-  ultra:  { tex: 128, rd: 8, shadows: 4, water: 3, veg: 3, aa: true,  clouds: 2, res: 1.5, post: 3, particles: 1.25, ssao: 2, dynLights: 4, torchShadows: true, godrays: true, sky: 1 },
+  low:    { tex: 32,  rd: 3, shadows: 0, water: 0, veg: 1, aa: false, clouds: 1, res: 0.75, post: 0, particles: 0.5, ssao: 0, dynLights: 0, torchShadows: false, godrays: false, sky: 1, mat: 0, autoExposure: false, dof: false, motionBlur: false, chromatic: false, grain: false, lensFlare: false, lensDrops: false, taa: false },
+  medium: { tex: 64,  rd: 5, shadows: 1, water: 1, veg: 2, aa: false, clouds: 1, res: 1, post: 1, particles: 0.8, ssao: 0, dynLights: 0, torchShadows: false, godrays: false, sky: 1, mat: 1, autoExposure: true, dof: false, motionBlur: false, chromatic: false, grain: false, lensFlare: false, lensDrops: true, taa: false },
+  high:   { tex: 64,  rd: 6, shadows: 3, water: 2, veg: 3, aa: true,  clouds: 2, res: 1.25, post: 2, particles: 1, ssao: 1, dynLights: 2, torchShadows: false, godrays: true, sky: 1, mat: 2, autoExposure: true, dof: false, motionBlur: false, chromatic: false, grain: false, lensFlare: true, lensDrops: true, taa: false },
+  ultra:  { tex: 128, rd: 8, shadows: 4, water: 3, veg: 3, aa: true,  clouds: 2, res: 1.5, post: 3, particles: 1.25, ssao: 2, dynLights: 4, torchShadows: true, godrays: true, sky: 1, mat: 3, autoExposure: true, dof: false, motionBlur: false, chromatic: true, grain: true, lensFlare: true, lensDrops: true, taa: false },
 };
 export const PRESET_ORDER = ['low', 'medium', 'high', 'ultra'];
 export const PRESET_NAMES = { low: 'Baixa', medium: 'Média', high: 'Alta', ultra: 'Ultra', custom: 'Personalizada' };
@@ -26,7 +26,7 @@ export function defaultSettings(isTouch) {
     preset: isTouch ? 'medium' : 'high',
     light: 1, fog: true, fogDensity: 1, fpsCap: isTouch ? 60 : 0, eco: false, auto: true,
     sens: 1, fov: 75, volume: 0.8, uiScale: 1, invertY: false, minimap: true, showInfo: true, compass: true, viewBob: true,
-    reduceFlash: false, highContrast: false, name: 'Jogador', skin: null, camDefault: 0, autoUpdate: true, lastServer: '', lastRoom: '', netKey: '',
+    reduceFlash: false, highContrast: false, name: 'Jogador', skin: null, camDefault: 0, autoUpdate: true, audio3d: true, lastServer: '', lastRoom: '', netKey: '',
     bloom: true, vignette: true, grading: true,
   }, isTouch ? PRESETS.medium : PRESETS.high);
 }
@@ -59,9 +59,13 @@ export function effective(s) {
     e.fpsCap = s.fpsCap === 0 ? 30 : Math.min(s.fpsCap, 30);
     e.post = 0; e.particles = Math.min(s.particles, 0.5);
     e.ssao = 0; e.dynLights = 0; e.torchShadows = false; e.godrays = false;
+    e.mat = Math.min(s.mat ?? 1, 1);
   }
-  // SSAO e raios de sol são passes de pós-processamento
-  if (!e.post) { e.ssao = 0; e.godrays = false; }
+  if (e.mat == null) e.mat = 1;
+  if (e.tex < 64) e.mat = Math.min(e.mat, 2);
+  if (s.eco) { e.dof = false; e.motionBlur = false; e.taa = false; e.chromatic = false; e.grain = false; e.lensFlare = false; }
+  // estes efeitos são passes de pós-processamento
+  if (!e.post) { e.ssao = 0; e.godrays = false; e.autoExposure = false; e.dof = false; e.motionBlur = false; e.chromatic = false; e.grain = false; e.lensFlare = false; e.lensDrops = false; e.taa = false; }
   if (e.ssao == null) e.ssao = 0;
   if (e.dynLights == null) e.dynLights = 0;
   if (e.sky == null) e.sky = 1;
@@ -86,6 +90,7 @@ const SCHEMA = [
   { key: 'dynLights', label: 'Luzes dinâmicas (tochas, lava)', type: 'select', num: true, options: [[0, 'Nenhuma'], [2, '2 mais próximas'], [4, '4 mais próximas']] },
   { key: 'torchShadows', label: '  Sombras da tocha mais próxima', type: 'check' },
   { key: 'godrays', label: 'Raios de sol (god rays)', type: 'check', note: 'precisa de pós-processamento' },
+  { key: 'mat', label: 'Materiais', type: 'select', num: true, options: [[0, 'Simples'], [1, 'Médio (chuva molha, neve acumula, variação)'], [2, 'Alto (+ detalhe de perto, sombra das nuvens)'], [3, 'Ultra (+ relevo parallax)']] },
   { key: 'sky', label: 'Céu', type: 'select', num: true, options: [[0, 'Clássico'], [1, 'Físico (dispersão atmosférica)']], keepPreset: true },
   { key: 'light', label: 'Intensidade da iluminação', type: 'range', min: 0.5, max: 1.6, step: 0.05, fmt: (v) => `${Math.round(v * 100)}%`, keepPreset: true },
   { key: 'water', label: 'Qualidade da água', type: 'select', num: true, options: [[0, 'Simples'], [1, 'Média (ondas + reflexo do céu)'], [2, 'Alta (+ brilho do sol, espuma, cáusticas)'], [3, 'Ultra (+ reflexos reais)']] },
@@ -94,6 +99,14 @@ const SCHEMA = [
   { key: 'aa', label: 'Antialiasing (MSAA)', type: 'check', note: 'reinicia o renderizador' },
   { key: 'post', label: 'Pós-processamento', type: 'select', num: true, options: [[0, 'Desligado'], [1, 'Leve (cor + vinheta)'], [2, 'Médio (+ brilho/bloom)'], [3, 'Alto (+ FXAA)']] },
   { key: 'bloom', label: '  Brilho (bloom)', type: 'check', keepPreset: true },
+  { key: 'autoExposure', label: '  Exposição automática (olho se adapta)', type: 'check' },
+  { key: 'taa', label: '  Anti-aliasing temporal (TAA)', type: 'check', note: 'melhor com MSAA desligado' },
+  { key: 'motionBlur', label: '  Desfoque de movimento', type: 'check' },
+  { key: 'dof', label: '  Profundidade de campo', type: 'check' },
+  { key: 'lensFlare', label: '  Reflexos do sol na lente', type: 'check' },
+  { key: 'lensDrops', label: '  Gotas de chuva na tela', type: 'check' },
+  { key: 'chromatic', label: '  Aberração cromática', type: 'check' },
+  { key: 'grain', label: '  Granulação de filme', type: 'check' },
   { key: 'vignette', label: '  Vinheta', type: 'check', keepPreset: true },
   { key: 'grading', label: '  Correção de cor', type: 'check', keepPreset: true },
   { key: 'particles', label: 'Densidade de partículas', type: 'range', min: 0, max: 1.5, step: 0.25, fmt: (v) => `${Math.round(v * 100)}%` },

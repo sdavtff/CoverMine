@@ -6,6 +6,7 @@ import { ITEMS } from './items.js';
 import { BLOCKS, EMIT, LOPQ } from './blocks.js';
 import { HUMANOID, SingleModel, drawHumanoidSkin, makeTexture, partGeometry, SKIN_PRESETS } from './models.js';
 import { buildItemSpriteAtlas } from './icons.js';
+import { patchEntityMaterial } from './shaders.js';
 import { EYE } from './player.js';
 
 export const HAND = {
@@ -43,6 +44,23 @@ export function setSkin(opts) {
   H.model.group.visible = false;
   G.scene.add(H.model.group);
   H.heldKey = null;
+}
+
+// cubo de bloco inteiro com as texturas do atlas (blocos caindo, TNT acesa)
+export function blockCubeMesh(id) {
+  const blk = BLOCKS[id];
+  const g = new THREE.BoxGeometry(0.98, 0.98, 0.98);
+  const uvA = g.attributes.uv;
+  const tiles = [blk.t[1], blk.t[1], blk.t[0], blk.t[2], blk.t[1], blk.t[1]];
+  for (let f = 0; f < 6; f++) {
+    const t = R.uv[tiles[f]];
+    const i = f * 4;
+    uvA.setXY(i, t[0], t[1]); uvA.setXY(i + 1, t[2], t[1]); uvA.setXY(i + 2, t[0], t[3]); uvA.setXY(i + 3, t[2], t[3]);
+  }
+  g.translate(0, 0.49, 0);
+  const m = new THREE.Mesh(g, patchEntityMaterial(new THREE.MeshLambertMaterial({ map: R.tex.albedo, emissive: 0xffffff, emissiveIntensity: 0 })));
+  m.castShadow = true;
+  return m;
 }
 
 // malha do item segurado
@@ -125,8 +143,15 @@ export function updateHand(dt) {
   const sw = pl.swing > 0 ? Math.sin(Math.min(1, 1 - pl.swing) * Math.PI) : 0;
   const bob = pl.onGround ? Math.sin(pl.walkDist * 2.4) : 0;
   const moving = Math.min(1, Math.hypot(pl.vel.x, pl.vel.z) / 4);
+  // inércia: a mão "atrasa" um pouco quando a câmera gira
+  const dyaw = H.lastYaw == null ? 0 : ((pl.yaw - H.lastYaw + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+  const dpit = H.lastPitch == null ? 0 : pl.pitch - H.lastPitch;
+  H.lastYaw = pl.yaw; H.lastPitch = pl.pitch;
+  H.lagX = (H.lagX || 0) * Math.exp(-dt * 10) + Math.max(-0.08, Math.min(0.08, dyaw * 0.6));
+  H.lagY = (H.lagY || 0) * Math.exp(-dt * 10) + Math.max(-0.08, Math.min(0.08, dpit * 0.6));
+  const breath = Math.sin((G.time || 0) * 1.8) * 0.006 * (1 - moving);
   // posição do braço na tela
-  H.rig.position.set(0.5 + bob * 0.012 * moving - sw * 0.14, -0.5 + Math.abs(bob) * 0.015 * moving - H.equip * 0.4 + sw * 0.08, -0.72 - sw * 0.12);
+  H.rig.position.set(H.lagX + 0.5 + bob * 0.012 * moving - sw * 0.14, -0.5 + Math.abs(bob) * 0.015 * moving - H.equip * 0.4 + sw * 0.08 - H.lagY + breath, -0.72 - sw * 0.12);
   H.rig.rotation.set(-sw * 0.9, -0.25 + sw * 0.4, 0);
   H.rig.scale.setScalar(0.8);
   H.arm.position.set(0.08, -0.05, 0.25);
@@ -181,8 +206,12 @@ export function renderHand(renderer) {
   const H = HAND;
   H.cam.aspect = G.camera.aspect;
   H.cam.updateProjectionMatrix();
+  // comprime a profundidade da mão para a faixa [0, 0.0005]: fica sempre na frente sem apagar a
+  // profundidade da cena (que o SSAO, o TAA e o desfoque de movimento usam)
+  const e = H.cam.projectionMatrix.elements, eps = 0.0005;
+  e[2] *= eps; e[6] *= eps; e[10] = eps * e[10] - eps + 1; e[14] *= eps;
+  H.cam.projectionMatrixInverse.copy(H.cam.projectionMatrix).invert();
   renderer.autoClear = false;
-  renderer.clearDepth();
   const sm = renderer.shadowMap.enabled;
   renderer.shadowMap.enabled = false;
   renderer.render(H.scene, H.cam);

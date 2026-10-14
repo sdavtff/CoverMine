@@ -266,16 +266,19 @@ export function meshChunk(world, c, ctx) {
   return { opaque: opq.export(), cutout: cut.export(), water: wat.export() };
 }
 
-function addCross(G, uvc, x, y, z, wx, wz, tile, sky, blk, tinted, ht, offset) {
+function addCross(G, uvc, x, y, z, wx, wz, tile, sky, blk, tinted, ht, offset, extraFlags = 0, hang = false) {
   const t = uvc[tile];
   const ox = offset ? (hash2(wx, wz, 11) - 0.5) * 0.3 : 0, oz = offset ? (hash2(wz, wx, 12) - 0.5) * 0.3 : 0;
   const planes = [[0.15, 0.15, 0.85, 0.85], [0.15, 0.85, 0.85, 0.15]];
   const cr = tinted ? Math.round(TINT[0] * 255) : 240, cg = tinted ? Math.round(TINT[1] * 255) : 240, cb = tinted ? Math.round(TINT[2] * 255) : 240;
   for (const [ax, az, bx, bz] of planes) for (let side = 0; side < 2; side++) {
     const base = G.count;
-    const P = [[ax, 0, az, 0, 1], [bx, 0, bz, 1, 1], [bx, ht, bz, 1, 0], [ax, ht, az, 0, 0]];
-    for (const [px, py, pz, pu, pv] of P) {
-      G.vert(x + px + ox, y + py, z + pz + oz, 0, 127, 0, pu ? t[2] : t[0], pv ? t[3] : t[1], cr, cg, cb, pv ? 200 : 255, sky * 17, blk * 17, pv ? 0 : 2);
+    // hang: pendurado no teto (estalactite, cipó) — desenhado de cima para baixo, sem balançar na base
+    const y0 = hang ? 1 - ht : 0, y1 = hang ? 1 : ht;
+    const P = [[ax, y0, az, 0, 1], [bx, y0, bz, 1, 1], [bx, y1, bz, 1, 0], [ax, y1, az, 0, 0]];
+    for (const [px, py, pz, pu, pv0] of P) {
+      const pv = hang ? 1 - pv0 : pv0;
+      G.vert(x + px + ox, y + py, z + pz + oz, 0, 127, 0, pu ? t[2] : t[0], pv ? t[3] : t[1], cr, cg, cb, pv ? 200 : 255, sky * 17, blk * 17, ((hang ? pv0 : pv) ? 0 : 2) | extraFlags);
     }
     if (side) G.quad(base, base + 2, base + 1, base, base + 3, base + 2);
     else G.quad(base, base + 1, base + 2, base, base + 2, base + 3);
@@ -299,7 +302,13 @@ function meshShape(G, world, i, x, y, z, id, meta, nb, uvc, wx, wz, biome) {
   // luz própria (modelos são transparentes à luz); usa a vizinhança mais clara para não ficar escuro
   let ls = sky, lb = blk;
   for (let d = 0; d < 6; d++) { const j = i + DIR6[d]; if (!LOPQ[VOL[j]]) { if (SKYL[j] > ls) ls = SKYL[j]; if (BLKL[j] > lb) lb = BLKL[j]; } }
-  if (def.shape === 'cross') { addCross(G, uvc, x, y, z, wx, wz, def.t[0], ls, lb, false, 0.9, false); return; }
+  if (def.shape === 'cross') {
+    const em = EMIT[id] > 0;
+    // estalactites (meta 1) e cipós ficam pendurados
+    const hang = (id === B.DRIPSTONE && meta === 1) || id === B.VINE;
+    addCross(G, uvc, x, y, z, wx, wz, def.t[0], ls, em ? 15 : lb, !!def.tint, id === B.VINE ? 1 : 0.9, false, em ? 4 : 0, hang);
+    return;
+  }
   if (def.shape === 'crop') { addCross(G, uvc, x, y, z, wx, wz, TILE.WHEAT0 + Math.min(3, meta >> 1), ls, lb, false, 0.95, false); return; }
   if (def.shape === 'rail') { meshRail(G, uvc, x, y, z, meta, ls, lb); return; }
   const boxes = shapeBoxes(id, meta, nb);
@@ -350,6 +359,21 @@ function meshRail(G, uvc, x, y, z, meta, sky, blk) {
   G.quad(base, base + 1, base + 2, base, base + 2, base + 3);
 }
 
+// altura da superfície de um líquido: fonte 0,88; corrente perde altura com o nível (1..7);
+// com o mesmo líquido em cima (ou caindo) fica cheio
+function liqHeight(i, liq) {
+  if (VOL[i] !== liq) return -1;
+  if (VOL[i + LA] === liq) return 1;
+  const m = VOLM[i], lvl = m & 7;
+  if (m & 8 || lvl === 0) return 0.88;
+  return Math.max(0.12, 0.88 * (8 - lvl) / 8);
+}
+// altura num canto do bloco: média das (até 4) colunas de líquido que compartilham o canto
+function cornerHeight(i, dx, dz, liq) {
+  let s = 0, n = 0, full = false;
+  for (const o of [0, dx, dz, dx + dz]) { const h = liqHeight(i + o, liq); if (h >= 1) full = true; if (h >= 0) { s += h; n++; } }
+  return full ? 1 : n ? s / n : 0.88;
+}
 function meshLiquid(G, i, x, y, z, liq, uvc) {
   const lowered = VOL[i + LA] !== liq;
   const lava = liq === B.LAVA;
@@ -367,7 +391,10 @@ function meshLiquid(G, i, x, y, z, liq, uvc) {
       let vy = y + 0.5 + 0.5 * (F.n[1] + su * F.u[1] + sv * F.v[1]);
       const vz = z + 0.5 + 0.5 * (F.n[2] + su * F.u[2] + sv * F.v[2]);
       let top = false;
-      if (lowered && vy === y + 1) { vy -= 0.12; top = true; }
+      if (lowered && vy === y + 1) {
+        const cdx = vx > x + 0.5 ? 1 : -1, cdz = vz > z + 0.5 ? LW : -LW;
+        vy = y + cornerHeight(i, cdx, cdz, liq); top = true;
+      }
       if (lava) {
         // lava: malha opaca emissiva (usa o tile do atlas)
         const t = uvc[TILE.LAVA];

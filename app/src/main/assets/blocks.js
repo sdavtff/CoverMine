@@ -14,8 +14,9 @@ export const B = {
   LEVER: 61, BUTTON: 62, PLATE: 63, WIRE: 64, PLAMP: 65, PLAMP_ON: 66, PISTON: 67, PISTON_HEAD: 68, RAIL: 69,
   ELEVATOR: 70, IRON_BLOCK: 71, GOLD_BLOCK: 72, DIAMOND_BLOCK: 73, COPPER_BLOCK: 74, FARMLAND: 75, WHEAT: 76,
   PATH: 77, MOSSY_COBBLE: 78, STONE_BRICKS: 79, CRYSTAL_BLOCK: 80, SAPLING: 81,
+  FIRE: 82, TNT: 83, DRIPSTONE: 84, VINE: 85,
 };
-export const BLOCK_COUNT = 82;
+export const BLOCK_COUNT = 86;
 
 // direções horizontais (meta "facing"): 0 = +z (sul), 1 = -x (oeste), 2 = -z (norte), 3 = +x (leste)
 export const FACING = [[0, 1], [-1, 0], [0, -1], [1, 0]];
@@ -105,6 +106,10 @@ const DEF = {
   [B.STONE_BRICKS]: { name: 'Tijolos de pedra', t: cube(T.STONE_BRICKS), hard: 1.5, tool: 'pickaxe', tier: 1, sound: 'stone' },
   [B.CRYSTAL_BLOCK]: { name: 'Bloco de cristal', t: cube(T.CRYSTAL_BLOCK), light: 12, hard: 1.5, tool: 'pickaxe', tier: 1, sound: 'glass' },
   [B.SAPLING]: { name: 'Muda de árvore', t: cube(T.SAPLING), hard: 0, shape: 'cross', sound: 'grass' },
+  [B.FIRE]: { name: 'Fogo', t: cube(T.FIRE), hard: 0, shape: 'cross', light: 15, drop: null, sound: 'grass', hidden: 1, fire: 1 },
+  [B.TNT]: { name: 'TNT', t: [T.TNT_TOP, T.TNT_SIDE, T.TNT_TOP], hard: 0, sound: 'grass', tnt: 1, flammable: 1 },
+  [B.DRIPSTONE]: { name: 'Estalactite', t: cube(T.DRIPSTONE), hard: 1.2, tool: 'pickaxe', shape: 'cross', sound: 'stone' },
+  [B.VINE]: { name: 'Cipó', t: cube(T.VINE), hard: 0.2, shape: 'cross', climb: 1, tint: 'leaves', sound: 'grass', flammable: 1 },
 };
 
 export const BLOCKS = [];

@@ -37,7 +37,9 @@ function buildToolbar() {
   q.onclick = () => { toggleMaxQuality(); q.classList.toggle('on', PHOTO.maxQ); };
   el('button', '', bar, '☀ −1h').onclick = () => { G.gameTime = (G.gameTime + 1 - 1 / 24) % 1; };
   el('button', '', bar, '☀ +1h').onclick = () => { G.gameTime = (G.gameTime + 1 / 24) % 1; };
-  el('button', '', bar, '👤').onclick = () => { if (G.player) G.player.camMode = G.player.camMode ? 0 : 1; };
+  const dofB = el('button', '', bar, '🎯 Foco');
+  dofB.onclick = () => { G.settings.dof = !G.settings.dof; dofB.classList.toggle('on', !!G.settings.dof); hook('settingsChanged', 'photo', true); };
+    el('button', '', bar, '👤').onclick = () => { if (G.player) G.player.camMode = G.player.camMode ? 0 : 1; };
   el('button', '', bar, '🖼 Fotos').onclick = () => showGallery();
   el('button', 'danger', bar, '✕ Sair').onclick = () => exitPhoto();
 }

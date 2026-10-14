@@ -1,5 +1,6 @@
 // Geração procedural determinística do mundo (sem THREE/DOM: roda no Web Worker e no thread principal).
-// gen 1 = gerador original (v1.0), gen 2 = v2.0 (árvores variadas), gen 3 = biomas, cavernas, minérios e estruturas.
+// gen 1 = gerador original (v1.0), gen 2 = v2.0 (árvores variadas), gen 3 = biomas, cavernas, minérios e estruturas,
+// gen 4 = gen 3 + erosão (vales), falésias, estalactites e cipós (mundos novos; mundos antigos não mudam).
 import { Perlin, hash2, hash3, mulberry32 } from './noise.js';
 import { B } from './blocks.js';
 
@@ -39,6 +40,7 @@ export class WorldGen {
       this.nLake = new Perlin(seed + 1011);
       this.nDet = new Perlin(seed + 1012);
     }
+    if (this.gen >= 4) { this.nEro = new Perlin(seed + 1013); this.nWarp = new Perlin(seed + 1014); }
     this.colCache = new Map();
   }
 
@@ -74,6 +76,20 @@ export class WorldGen {
     // lagos em áreas planas
     const lake = this.nLake.fbm(x / 120, z / 120, 2);
     if (lake < -0.34 && h > S && h < S + 18 && mnt < 0.05) h = lerp(h, S - 4, smooth(-0.34, -0.48, lake));
+    // gen 4: erosão aproximada — vales ramificados (ruído "ridged" com domínio distorcido), mais fundos
+    // onde o relevo é alto; e falésias em degraus nas encostas de montanha
+    if (this.gen >= 4) {
+      const wx = x + this.nWarp.fbm(x / 180, z / 180, 2) * 70, wz = z + this.nWarp.fbm(x / 180 + 40, z / 180 + 40, 2) * 70;
+      const ridge = 1 - Math.abs(this.nEro.fbm(wx / 260, wz / 260, 3));
+      const ridge2 = 1 - Math.abs(this.nEro.fbm(wx / 95 + 50, wz / 95 + 50, 2));
+      const relief = Math.max(0, h - S - 4);
+      h -= relief * (0.42 * smooth(0.84, 0.985, ridge) + 0.18 * smooth(0.88, 0.99, ridge2));
+      if (mnt > 0.07) {
+        const step = 7, t = (h - S) / step, f = t - Math.floor(t);
+        const terr = S + Math.floor(t) * step + f * f * f * step;
+        h = lerp(h, terr, smooth(0.07, 0.2, mnt) * 0.85);
+      }
+    }
     // rios
     const rv = Math.abs(this.nRiv.fbm(x / 420 + 11.3, z / 420 + 7.1, 3));
     let river = false;
@@ -252,6 +268,7 @@ export class WorldGen {
     }
     this.carveCaves(cx, cz, data, cols);
     this.placeOres(cx, cz, data);
+    if (this.gen >= 4) this.decorateCaves(cx, cz, data, meta, cols);
     // árvores e plantas (margem de 3 para copas que cruzam a borda do chunk)
     for (let tz = -3; tz < CS + 3; tz++) for (let tx = -3; tx < CS + 3; tx++) {
       const wx = x0 + tx, wz = z0 + tz;
@@ -260,7 +277,39 @@ export class WorldGen {
       const tr = this.tree3(wx, wz, c);
       if (tr) this.placeTree3(data, meta, tx, tz, wx, wz, c.h, tr);
     }
+    if (this.gen >= 4) this.placeVines(cx, cz, data, cols);
     this.placeStructures(cx, cz, data, meta);
+  }
+
+  // gen 4: estalactites no teto e estalagmites no chão das cavernas
+  decorateCaves(cx, cz, data, meta, cols) {
+    const S = CS * CS, x0 = cx * CS, z0 = cz * CS;
+    for (let z = 0; z < CS; z++) for (let x = 0; x < CS; x++) {
+      const col = x + z * CS, h = cols[col].h;
+      for (let y = 6; y < h - 6; y++) {
+        const i = col + y * S;
+        if (data[i] !== B.AIR) continue;
+        const r = hash3(x0 + x, y, z0 + z, this.seed + 91);
+        if (data[i + S] === B.STONE && r < 0.06) { data[i] = B.DRIPSTONE; meta[i] = 1; }
+        else if (data[i - S] === B.STONE && r > 0.965) { data[i] = B.DRIPSTONE; meta[i] = 0; }
+      }
+    }
+  }
+  // gen 4: cipós pendurados nas copas do pântano e da floresta densa
+  placeVines(cx, cz, data, cols) {
+    const S = CS * CS, x0 = cx * CS, z0 = cz * CS;
+    for (let z = 0; z < CS; z++) for (let x = 0; x < CS; x++) {
+      const col = x + z * CS, c = cols[col];
+      if (c.biome !== BIOME.SWAMP && c.biome !== BIOME.DENSE_FOREST) continue;
+      for (let y = Math.min(H - 2, c.h + 18); y > c.h + 2; y--) {
+        const i = col + y * S;
+        if (data[i] !== B.LEAVES || data[i - S] !== B.AIR) continue;
+        const r = hash3(x0 + x, y, z0 + z, this.seed + 93);
+        if (r > (c.biome === BIOME.SWAMP ? 0.22 : 0.1)) continue;
+        const len = 1 + Math.floor(hash3(x0 + x, y, z0 + z, this.seed + 94) * 5);
+        for (let k = 1; k <= len && y - k > c.h && data[i - k * S] === B.AIR; k++) data[i - k * S] = B.VINE;
+      }
+    }
   }
 
   tree3(x, z, c) {

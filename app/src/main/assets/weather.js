@@ -110,6 +110,10 @@ export function updateWeather(dt) {
   const local = dry ? 0 : W.rain;
   W.local = local;
   W.flash = Math.max(0, W.flash - dt * 3);
+  // superfícies molham em ~25 s de chuva e secam em ~90 s; neve acumula em ~60 s e derrete em ~3 min
+  const raining = local > 0.2;
+  W.wet = raining && !cold ? Math.min(1, (W.wet || 0) + dt / 25) : Math.max(0, (W.wet || 0) - dt / 90);
+  W.snowCover = raining && cold ? Math.min(1, (W.snowCover || 0) + dt / 60) : Math.max(0, (W.snowCover || 0) - dt / (cold ? 600 : 180));
   // raios
   if (W.storm > 0.6 && !dry) {
     W.boltT -= dt;
@@ -137,7 +141,7 @@ export function updateWeather(dt) {
   // som de chuva (abafado sob telhado)
   const roof = hmData[(32 + 32 * 64) * 4] > pl.pos.y + 2;
   setRain(cold ? 0 : local * (roof ? 0.35 : 1));
-  return { rain: local, storm: dry ? 0 : W.storm, flash: W.flash };
+  return { rain: local, storm: dry ? 0 : W.storm, flash: W.flash, wet: W.wet, snowCover: W.snowCover };
 }
 
 function lightning() {
@@ -153,7 +157,11 @@ function lightning() {
   W.bolt.geometry = new THREE.BufferGeometry().setFromPoints(pts);
   W.bolt.visible = true; W.boltLife = 0.25;
   W.flash = 1;
-  setTimeout(() => playSound('thunder', Math.max(0.3, 1 - d / 120)), d / 343 * 1000);
+  // às vezes o raio põe fogo no chão
+  if (Math.random() < 0.25) hook('ignite', Math.floor(x), ground, Math.floor(z));
+  // trovão vem da direção do raio (som 3D), atrasado pela distância
+  const bp = { x: pts[0].x, y: Math.min(pts[0].y, (G.player ? G.player.pos.y : 60) + 30), z: pts[0].z };
+  setTimeout(() => playSound('thunder', Math.max(0.3, 1 - d / 120), bp), d / 343 * 1000);
   hook('lightning', x, ground, z);
 }
 export function weatherJSON() { return { state: W.state, timer: W.timer }; }

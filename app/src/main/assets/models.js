@@ -65,13 +65,16 @@ const _e = new THREE.Euler(), _q = new THREE.Quaternion(), _m = new THREE.Matrix
 export function partRotation(part, st) {
   const a = Math.sin(st.walk || 0) * 0.8 * (st.walkAmt || 0);
   let rx = 0, ry = 0, rz = 0;
+  // respiração: braços e cabeça oscilam de leve quando parado
+  const idle = st.t != null ? Math.max(0, 1 - (st.walkAmt || 0) * 3) : 0;
+  const br = idle ? Math.sin(st.t * 1.7 + (st.ph || 0)) : 0;
   switch (part.anim) {
-    case 'head': rx = st.headPitch || 0; ry = st.headYaw || 0; break;
+    case 'head': rx = (st.headPitch || 0) + br * 0.025 * idle; ry = st.headYaw || 0; break;
     case 'legL': rx = st.sit ? -1.4 : a; break;
     case 'legR': rx = st.sit ? -1.4 : -a; break;
     case 'legFL': rx = a; break; case 'legFR': rx = -a; break; case 'legBL': rx = -a; break; case 'legBR': rx = a; break;
-    case 'armL': rx = -a * 0.9 + (st.zombie ? -1.45 : 0); rz = 0.05; break;
-    case 'armR': rx = a * 0.9 - (st.swing ? Math.sin(st.swing * Math.PI) * 1.4 : 0) + (st.zombie ? -1.45 : 0) - (st.holding ? 0.3 : 0); rz = -0.05; break;
+    case 'armL': rx = -a * 0.9 + (st.zombie ? -1.45 : 0); rz = 0.05 + br * 0.035 * idle; break;
+    case 'armR': rx = a * 0.9 - (st.swing ? Math.sin(st.swing * Math.PI) * 1.4 : 0) + (st.zombie ? -1.45 : 0) - (st.holding ? 0.3 : 0); rz = -0.05 - br * 0.035 * idle; break;
     case 'wingL': rz = st.flap ? Math.sin(st.flap) * 0.6 : 0; break;
     case 'wingR': rz = st.flap ? -Math.sin(st.flap) * 0.6 : 0; break;
     case 'tail': ry = Math.sin((st.walk || 0) * 2) * 0.4 * (st.walkAmt || 0); break;

@@ -32,6 +32,8 @@ for (const t in TIERS) for (const k in TOOL_KINDS) {
   });
 }
 add('bow', { name: 'Arco', stack: 1, tool: { kind: 'bow', tier: 0, speed: 1, dur: 384, dmg: 1 }, icon: { shape: 'bow' }, fuel: 10 });
+add('flint_and_steel', { name: 'Isqueiro de pederneira', stack: 1, tool: { kind: 'igniter', tier: 0, speed: 1, dur: 64, dmg: 1 }, icon: { shape: 'flintsteel' } });
+add('flint', { name: 'Pederneira', icon: { shape: 'lump', color: [70, 70, 75] } });
 add('shears', { name: 'Tesoura', stack: 1, tool: { kind: 'shears', tier: 0, speed: 1, dur: 238, dmg: 1 }, icon: { shape: 'shears' } });
 
 // ---- armaduras ----
@@ -130,7 +132,7 @@ export function blockDrops(id, meta, toolDef, rnd = Math.random) {
       if (rnd() < 0.04) out.push(['stick', 1]);
       return out;
     }
-    case 'gravel_drop': return [['gravel', 1]];
+    case 'gravel_drop': return rnd() < 0.12 ? [['flint', 1]] : [['gravel', 1]];
     case 'wheat_drop': return (meta & 7) >= 7 ? [['wheat', 1], ['seeds', 1 + Math.floor(rnd() * 3)]] : [['seeds', 1]];
     case 'dirt': return [['dirt', 1], ...(id === B.GRASS && rnd() < 0.08 ? [['seeds', 1]] : [])];
     case 'raw_iron': case 'raw_copper': case 'raw_gold': case 'coal': case 'diamond':

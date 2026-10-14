@@ -97,7 +97,7 @@ function showCreate() {
     const desc = el('div', 'muted', f, MODE_DESC.survival);
     mode.onchange = () => desc.textContent = MODE_DESC[mode.value];
     const gen = el('select', '', row('Gerador de terreno'));
-    for (const [v, t] of [[3, 'Biomas (rios, cavernas, minérios, aldeias)'], [2, 'Clássico v2'], [1, 'Original v1']]) { const o = el('option', '', gen, t); o.value = v; }
+    for (const [v, t] of [[4, 'Natural (erosão, falésias, estalactites, cipós)'], [3, 'Biomas (rios, cavernas, minérios, aldeias)'], [2, 'Clássico v2'], [1, 'Original v1']]) { const o = el('option', '', gen, t); o.value = v; }
     const go = el('button', 'big primary', box, 'Criar e jogar');
     go.onclick = async () => {
       let s = seed.value.trim();
@@ -140,6 +140,7 @@ export function showSettings(back) {
       chk('Balanço da câmera ao andar', 'viewBob');
       chk('Reduzir flashes (raios)', 'reduceFlash');
       chk('Textos grandes / alto contraste', 'highContrast');
+      chk('Som 3D (fones: direção dos sons) e eco do ambiente', 'audio3d');
       chk('Atualizar o jogo automaticamente (com internet)', 'autoUpdate');
       // benchmark: mede o desempenho do preset atual num trajeto fixo (sem mexer nos mundos salvos)
       const bsec = el('div', 'mp-section', f);
@@ -368,7 +369,7 @@ export function showMultiplayer() {
       if (src.value === 'new') {
         const t = wseed.value.trim();
         let seed = !t ? (Math.random() * 2147483647) | 0 : /^-?\d+$/.test(t) ? parseInt(t, 10) | 0 : [...t].reduce((h, ch) => (Math.imul(h, 31) + ch.charCodeAt(0)) | 0, 7);
-        source = { type: 'new', name: wname.value.trim() || 'Mundo compartilhado', seed, mode: wmode.value, gen: 3 };
+        source = { type: 'new', name: wname.value.trim() || 'Mundo compartilhado', seed, mode: wmode.value, gen: 4 };
       } else source = { type: 'saved', id: src.value };
       hook('createRoom', addr.value.trim(), name, rpass.value, source, setStatus);
     };

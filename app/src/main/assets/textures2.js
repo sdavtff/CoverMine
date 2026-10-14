@@ -383,5 +383,47 @@ export function EXTRA_GEN(h) {
       return [60, 110, 40, 0, 0];
     },
     [T.SAVANNA_GRASS]: (u, v, px, py) => { const [c, hh] = grassCol(u, v, px, py, 551); const k = mixc(c, [170, 160, 80], 0.45); return [k[0], k[1], k[2], 1, hh]; },
+    // fogo: línguas de chama (mais quentes embaixo), recorte por ruído
+    [T.FIRE]: (u, v, px, py) => {
+      const n = fbm(u, v * 0.7, 5, 3, 4, 561);
+      const flame = 1 - v * 0.85 - Math.abs(u - 0.5) * 0.6 + (n - 0.5) * 0.9;
+      if (flame < 0.18) return [255, 120, 20, 0, 0];
+      const c = mixc([255, 90, 10], [255, 235, 140], smooth(0.18, 0.75, flame));
+      return [c[0], c[1], c[2], 1, flame];
+    },
+    // TNT: lateral com faixa clara e letras escuras; topo com pavio
+    [T.TNT_SIDE]: (u, v, px, py) => {
+      const g = ihash(px, py, 571);
+      if (v > 0.38 && v < 0.62) {
+        const lx = Math.floor(u * 16), ly = Math.floor((v - 0.38) * 16 / 0.24 * 0.4);
+        const letter = (lx % 5 === 1 || lx % 5 === 3) && lx > 0 && lx < 15 || (lx % 5 === 2 && ly === 0);
+        const c = letter ? [40, 30, 30] : mulc([235, 225, 205], 0.92 + g * 0.08);
+        return [c[0], c[1], c[2], 1, letter ? 0.3 : 0.6];
+      }
+      const c = mulc([200, 45, 35], 0.85 + g * 0.2 + (Math.floor(u * 4) % 2) * 0.05);
+      return [c[0], c[1], c[2], 1, 0.5 + (Math.floor(u * 4) % 2) * 0.1];
+    },
+    [T.TNT_TOP]: (u, v, px, py) => {
+      const d = Math.hypot(u - 0.5, v - 0.5);
+      if (d < 0.12) return [60, 50, 40, 1, 1];
+      const c = mulc([210, 60, 45], 0.85 + ihash(px, py, 581) * 0.2);
+      return [c[0], c[1], c[2], 1, 0.5];
+    },
+    // estalactite: ponta de pedra afunilada (para baixo)
+    [T.DRIPSTONE]: (u, v, px, py) => {
+      const w = 0.42 * (1 - v) + 0.04;
+      if (Math.abs(u - 0.5) > w) return [120, 105, 90, 0, 0];
+      const c = mulc([150, 128, 108], 0.8 + fbm(u, v, 4, 4, 3, 591) * 0.35);
+      return [c[0], c[1], c[2], 1, 1 - Math.abs(u - 0.5) / w];
+    },
+    // cipó: ramos verticais com folhinhas (tingido pela cor das folhas do bioma)
+    [T.VINE]: (u, v, px, py) => {
+      const strand = Math.abs(((u * 4) % 1) - 0.5 - Math.sin(v * 9 + Math.floor(u * 4)) * 0.12) < 0.08;
+      const [d1, , id] = worley(u, v, 6, 601, 1);
+      const leaf = d1 < 0.22 && ihash(id, 3, 601) < 0.6;
+      if (!strand && !leaf) return [80, 120, 50, 0, 0];
+      const c = mulc([150, 150, 150], 0.75 + ihash(px, py, 602) * 0.3);
+      return [c[0], c[1], c[2], 1, leaf ? 0.8 : 0.5];
+    },
   };
 }

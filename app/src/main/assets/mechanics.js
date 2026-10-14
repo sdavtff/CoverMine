@@ -12,7 +12,7 @@ function isSourceOn(id, meta) {
   if (id === B.LEVER || id === B.BUTTON || id === B.PLATE) return !!(meta & 8);
   return false;
 }
-function isConsumer(id) { return id === B.PLAMP || id === B.PLAMP_ON || id === B.DOOR || id === B.FENCE_GATE || id === B.PISTON; }
+function isConsumer(id) { return id === B.PLAMP || id === B.PLAMP_ON || id === B.DOOR || id === B.FENCE_GATE || id === B.PISTON || id === B.TNT; }
 
 // recalcula a rede de energia ao redor de (x, y, z)
 export function recompute(x, y, z) {
@@ -88,6 +88,8 @@ function poweredUpper(x, y, z, wires) {
 function updateConsumer(x, y, z, on) {
   const w = G.world, set = (x_, y_, z_, id, m) => hook('setBlock', x_, y_, z_, id, m);
   const id = w.getBlock(x, y, z), m = w.getMeta(x, y, z);
+  // TNT recebendo energia é acesa
+  if (id === B.TNT && on) { set(x, y, z, B.AIR, 0); hook('primeTNT', x, y, z, 3); return; }
   if (id === B.PLAMP && on) set(x, y, z, B.PLAMP_ON, m);
   else if (id === B.PLAMP_ON && !on) set(x, y, z, B.PLAMP, m);
   else if (id === B.DOOR) {

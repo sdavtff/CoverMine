@@ -206,6 +206,14 @@ export class Player {
     } else this.air = Math.min(10, this.air + dt * 4);
     // lava e cacto
     if (this.inLava || this.headInLava) { this.envDmgT -= dt; if (this.envDmgT <= 0) { this.envDmgT = 0.5; this.damage(4, 'lava'); } }
+    // fogo: queima enquanto estiver dentro (e mais um pouco depois de sair)
+    const wf = G.world;
+    if (wf.getBlock(Math.floor(this.pos.x), Math.floor(this.pos.y), Math.floor(this.pos.z)) === B.FIRE || wf.getBlock(Math.floor(this.pos.x), Math.floor(this.pos.y + 1), Math.floor(this.pos.z)) === B.FIRE) this.burnT = 3;
+    if (this.burnT > 0) {
+      this.burnT -= dt; if (this.inWater) this.burnT = 0;
+      this.fireDmgT = (this.fireDmgT || 0) - dt;
+      if (this.fireDmgT <= 0 && this.burnT > 0) { this.fireDmgT = 1; this.damage(1, 'fire'); }
+    }
     else {
       const hw = this.hw + 0.02;
       let cactus = false;

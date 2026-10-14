@@ -7,13 +7,13 @@ import { stepEntity, collides, liquidAt } from './physics.js';
 import { B, BLOCKS, SOLID, LOPQ, EMIT, LIQUID, FULL } from './blocks.js';
 import { ITEMS } from './items.js';
 import { R } from './render.js';
-import { HAND } from './hand.js';
+import { HAND, blockCubeMesh } from './hand.js';
 import * as PT from './particles.js';
 import { BIOME } from './worldgen.js';
 import { patchEntityMaterial } from './shaders.js';
 import { makeTrades, makeQuest } from './villagers.js';
 
-export const E = { list: [], models: {}, nextId: 1, spawnT: 0, hostileT: 0, villages: new Set() };
+export const E = { list: [], models: {}, nextId: 1, spawnT: 0, hostileT: 0, villages: new Set(), corpses: [] };
 const CAP_PASSIVE = 30, CAP_HOSTILE = 12, CAP_FISH = 8;
 
 // ---------------- base ----------------
@@ -163,6 +163,7 @@ export function initEntities() {
   hookUp();
 }
 export function clearEntities() {
+  E.corpses = [];
   for (const e of E.list) removeVisual(e);
   E.list = [];
   E.villages.clear();
@@ -257,7 +258,8 @@ export function attackEntity(e, dmg, attacker) {
 function killMob(e, attacker) {
   e.dead = true;
   const t = e.T;
-  PT.smoke(e.pos.x, e.pos.y + 0.3, e.pos.z, 10, [0.9, 0.9, 0.9]);
+  // corpo tomba de lado (com o empurrão do golpe) e some numa nuvem de fumaça
+  E.corpses.push({ type: e.type, variant: e.variant, x: e.pos.x, y: e.pos.y, z: e.pos.z, yaw: e.yaw, scale: e.scale, t: 0, vx: e.vel.x * 0.4, vz: e.vel.z * 0.4, light: e.light || 1, side: Math.random() < 0.5 ? 1 : -1, hh: e.hh });
   hook('sound', 'death_mob', e.type);
   if (e.baby > 0) return;
   for (const [k, a, b] of t.drops) {
@@ -359,6 +361,7 @@ export function updateEntities(dt) {
     if (e.kind === 'item') updateItem(e, dt);
     else if (e.kind === 'arrow') updateArrow(e, dt);
     else if (e.kind === 'mob') updateMob(e, dt, far);
+    else if (e.kind === 'falling' || e.kind === 'tnt') updateBlockEnt(e, dt);
     else updateVehicle(e, dt);
   }
   // remove mortos
@@ -402,6 +405,66 @@ function updateArrow(e, dt) {
     for (const m of E.list) if (m.kind === 'mob' && m !== e.owner && !m.dead && Math.abs(e.pos.x - m.pos.x) < m.hw + 0.1 && Math.abs(e.pos.z - m.pos.z) < m.hw + 0.1 && e.pos.y > m.pos.y && e.pos.y < m.pos.y + m.hh) { attackEntity(m, e.dmg, e.owner && e.owner.pos ? e.owner : null); e.dead = true; return; }
   }
   if (e.age > 20) e.dead = true;
+}
+
+// ---------------- blocos caindo e TNT acesa ----------------
+class BlockEnt extends Ent {
+  constructor(kind, x, y, z, id, meta, fuse) {
+    super(kind, x, y, z);
+    this.block = id; this.meta = meta || 0; this.fuse = fuse || 0;
+    this.hw = 0.49; this.hh = 0.98; this.yaw = 0;
+  }
+}
+export function spawnFallingBlock(x, y, z, id, meta) { const e = new BlockEnt('falling', x + 0.5, y, z + 0.5, id, meta); E.list.push(e); return e; }
+export function spawnPrimedTNT(x, y, z, fuse = 3) {
+  const e = new BlockEnt('tnt', x + 0.5, y, z + 0.5, B.TNT, 0, fuse);
+  e.vel.y = 2.5; e.vel.x = (Math.random() - 0.5) * 0.6; e.vel.z = (Math.random() - 0.5) * 0.6;
+  E.list.push(e); hook('sound', 'fuse', e.pos);
+  return e;
+}
+function updateBlockEnt(e, dt) {
+  e.vel.y -= 25 * dt;
+  e.vel.x *= 1 - dt * 2; e.vel.z *= 1 - dt * 2;
+  stepEntity(e, dt, { autoStep: false });
+  if (e.kind === 'tnt') {
+    e.fuse -= dt;
+    if (Math.random() < dt * 20) PT.smoke(e.pos.x, e.pos.y + 1.05, e.pos.z, 1, [0.6, 0.6, 0.6]);
+    if (e.fuse <= 0) { e.dead = true; hook('explode', e.pos.x, e.pos.y + 0.5, e.pos.z, 3.6); }
+    return;
+  }
+  // bloco caindo: ao tocar o chão vira bloco de novo (ou item, se o lugar estiver ocupado)
+  if (e.onGround || e.age > 12) {
+    e.dead = true;
+    const x = Math.floor(e.pos.x), y = Math.floor(e.pos.y + 0.1), z = Math.floor(e.pos.z);
+    const cur = G.world.getBlock(x, y, z);
+    const d = BLOCKS[cur];
+    if (!cur || (d && (d.shape === 'cross' || d.liquid))) hook('setBlock', x, y, z, e.block, e.meta);
+    else dropItem(e.pos.x, e.pos.y + 0.3, e.pos.z, BLOCKS[e.block].key, 1);
+    hook('sound', 'place', BLOCKS[e.block] && BLOCKS[e.block].sound);
+  }
+}
+// dano e empurrão de uma explosão (criaturas, itens, veículos, jogador)
+export function explosionDamage(cx, cy, cz, power) {
+  const R2 = power * 2;
+  for (const e of E.list) {
+    if (e.dead) continue;
+    const dx = e.pos.x - cx, dy = e.pos.y + (e.hh || 0.5) / 2 - cy, dz = e.pos.z - cz, d = Math.hypot(dx, dy, dz) || 0.1;
+    if (d > R2) continue;
+    const k = 1 - d / R2;
+    e.vel.x += dx / d * 14 * k; e.vel.y += 6 + 8 * k; e.vel.z += dz / d * 14 * k;
+    if (e.kind === 'mob') { e.hurt = 0; attackEntity(e, 16 * k, null); }
+    else if (e.kind === 'boat' || e.kind === 'minecart') attackEntity(e, 10 * k, null);
+    else if (e.kind === 'item' && k > 0.7) e.dead = true;
+  }
+  const pl = G.player;
+  if (pl && !pl.dead) {
+    const dx = pl.pos.x - cx, dy = pl.pos.y + 0.9 - cy, dz = pl.pos.z - cz, d = Math.hypot(dx, dy, dz) || 0.1;
+    if (d < R2) {
+      const k = 1 - d / R2;
+      pl.vel.x += dx / d * 16 * k; pl.vel.y += 7 * k + 3; pl.vel.z += dz / d * 16 * k;
+      if (G.mode !== 'creative') pl.damage(Math.round(18 * k * k + 2 * k), 'explosion');
+    }
+  }
 }
 
 function updateVehicle(v, dt) {
@@ -771,6 +834,21 @@ function vehicleMesh(kind) {
 export function renderEntities() {
   for (const type in E.models) for (const v in E.models[type]) E.models[type][v].begin();
   const t = G.time;
+  const now = performance.now(), rdt = Math.min(0.1, (now - (E.lastRender || now)) / 1000); E.lastRender = now;
+  // corpos caindo (animação de morte)
+  E.corpses = E.corpses.filter((c) => {
+    c.t += rdt;
+    if (c.t > 0.9) { PT.smoke(c.x, c.y + 0.3, c.z, 10, [0.9, 0.9, 0.9]); return false; }
+    c.x += c.vx * rdt; c.z += c.vz * rdt; c.vx *= 0.9; c.vz *= 0.9;
+    const mdl = E.models[c.type] && (E.models[c.type][c.variant ?? 'null'] || E.models[c.type][Object.keys(E.models[c.type])[0]]);
+    if (!mdl) return true;
+    const fall = Math.min(1, c.t / 0.45);
+    _e.set(0, c.yaw, c.side * fall * fall * Math.PI / 2, 'YXZ');
+    _q.setFromEuler(_e);
+    _base.compose(_p.set(c.x, c.y + Math.sin(fall * Math.PI) * 0.15, c.z), _q, _s.set(c.scale, c.scale, c.scale));
+    mdl.add(_base, { walk: 0, walkAmt: 0 }, c.light, 1);
+    return true;
+  });
   for (const e of E.list) {
     if (e.dead) continue;
     const hidden = e.frozen;
@@ -778,17 +856,31 @@ export function renderEntities() {
       if (hidden) continue;
       const mdl = E.models[e.type][e.variant ?? 'null'] || E.models[e.type][Object.keys(E.models[e.type])[0]];
       const s = e.scale;
-      _e.set(0, e.yaw, 0);
+      // degraus suaves: a altura desenhada persegue a física em vez de "pular" um bloco
+      if (e.ry == null || Math.abs(e.ry - e.pos.y) > 1.6) e.ry = e.pos.y;
+      e.ry += (e.pos.y - e.ry) * Math.min(1, rdt * 14);
+      // inclina para frente ao correr
+      const lean = Math.min(1, Math.max(0, (e.walkAmt || 0) - 0.5) * 2) * 0.12;
+      _e.set(lean, e.yaw, 0, 'YXZ');
       _q.setFromEuler(_e);
-      _base.compose(_p.set(e.pos.x, e.pos.y, e.pos.z), _q, _s.set(s, s, s));
+      _base.compose(_p.set(e.pos.x, e.ry, e.pos.z), _q, _s.set(s, s, s));
       const T = e.T;
-      const st = { walk: e.walk, walkAmt: e.walkAmt, headYaw: 0, headPitch: 0, swing: e.swing || 0, zombie: T.zombie, flap: e.flap || 0, holding: T.ranged };
+      // olha para o jogador quando ele está perto (animais e aldeões)
+      let headYaw = 0;
+      const pl = G.player;
+      if (pl && !T.hostile) {
+        const dx = pl.pos.x - e.pos.x, dz = pl.pos.z - e.pos.z, d2 = dx * dx + dz * dz;
+        if (d2 < 36 && d2 > 0.5) { let a = Math.atan2(dx, dz) - e.yaw; while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; if (Math.abs(a) < 1.3) headYaw = a; }
+      }
+      e.hy = (e.hy || 0) + (headYaw - (e.hy || 0)) * Math.min(1, rdt * 6);
+      const st = { walk: e.walk, walkAmt: e.walkAmt, headYaw: e.hy, headPitch: 0, swing: e.swing || 0, zombie: T.zombie, flap: e.flap || 0, holding: T.ranged, t, ph: e.id };
       mdl.add(_base, st, e.light * (e.burnT > 0 && T.burns ? 1.3 : 1), e.hurt > 0 ? 1 : 0);
       continue;
     }
     if (!e.mesh) {
       if (e.kind === 'item') e.mesh = itemMesh(e.k);
       else if (e.kind === 'arrow') e.mesh = new THREE.Mesh(E.arrowGeo, E.arrowMat);
+      else if (e.kind === 'falling' || e.kind === 'tnt') e.mesh = blockCubeMesh(e.block);
       else e.mesh = vehicleMesh(e.kind);
       G.scene.add(e.mesh);
     }
@@ -802,9 +894,19 @@ export function renderEntities() {
     } else if (e.kind === 'arrow') {
       e.mesh.position.set(e.pos.x, e.pos.y, e.pos.z);
       if (!e.stuck) e.mesh.lookAt(e.pos.x + e.vel.x, e.pos.y + e.vel.y, e.pos.z + e.vel.z);
-    } else {
+    } else if (e.kind === 'falling' || e.kind === 'tnt') {
       e.mesh.position.set(e.pos.x, e.pos.y, e.pos.z);
-      e.mesh.rotation.set(0, e.yaw, 0);
+      // TNT pisca (cada vez mais rápido) e incha um pouco antes de explodir
+      if (e.kind === 'tnt') {
+        const f = Math.max(0, e.fuse);
+        e.mesh.material.emissiveIntensity = Math.sin(t * (f < 1 ? 30 : 12)) > 0.2 ? 0.55 : 0;
+        e.mesh.scale.setScalar(1 + (f < 0.4 ? (0.4 - f) * 0.4 : 0));
+      }
+    } else {
+      // barco balança na água
+      const bob = e.kind === 'boat' && e.inWater ? Math.sin(t * 1.8 + e.id) : 0;
+      e.mesh.position.set(e.pos.x, e.pos.y + bob * 0.04, e.pos.z);
+      e.mesh.rotation.set(bob * 0.03, e.yaw, Math.cos(t * 1.3 + e.id) * (e.kind === 'boat' && e.inWater ? 0.04 : 0));
     }
   }
   for (const type in E.models) for (const v in E.models[type]) E.models[type][v].end();
@@ -820,7 +922,7 @@ export function serializeEntities() {
       if (e.T.hostile) continue;
       Object.assign(base, { t: e.type, v: e.variant, hp: e.health, baby: e.baby > 0 ? Math.round(e.baby) : 0, saddled: e.saddled || 0, home: e.home, village: e.village, trades: e.trades, quest: e.quest, name: e.name });
     } else if (e.kind === 'item') Object.assign(base, { item: e.k, n: e.n, d: e.d, age: Math.round(e.age) });
-    else if (e.kind === 'arrow') continue;
+    else if (e.kind === 'arrow' || e.kind === 'falling' || e.kind === 'tnt') continue;
     out.push(base);
   }
   return out;

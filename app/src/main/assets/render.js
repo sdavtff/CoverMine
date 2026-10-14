@@ -18,7 +18,7 @@ export const R = {
   reflRT: null, maxAniso: 1, halfFloatRT: false, frameNo: 0,
   stats: { meshMain: 0, meshWorker: 0 },
 };
-const ATLAS_VERSION = 'atlas-v3.0';
+const ATLAS_VERSION = 'atlas-v3.1';
 
 // ---------------- inicialização ----------------
 export function initRenderer(canvas) {
@@ -148,8 +148,11 @@ export function makeTerrainMaterials() {
     const m = eff.pbr
       ? new THREE.MeshStandardMaterial(Object.assign(p, { roughnessMap: tex.orm, roughness: 1, metalness: 0, envMapIntensity: 0.6 }))
       : new THREE.MeshLambertMaterial(p);
+    m.userData.vcMat = eff.mat | 0;
     return patchTerrainMaterial(m);
   };
+  // relevo (parallax): deslocamento máximo de ~4% do bloco, em unidades do atlas
+  if (R.uv[1]) U.uPomScale.value = Math.abs(R.uv[1][2] - R.uv[1][0]) * 0.045;
   const old = Object.assign({}, mats);
   mats.opaque = mk(false);
   mats.cutout = mk(true);
@@ -186,7 +189,7 @@ export async function applyGraphics(key) {
   const eff = G.eff = effective(G.settings);
   const all = key === undefined;
   if (all || prev.tex !== eff.tex) await loadTextures(eff.tex);
-  if (all || prev.tex !== eff.tex || prev.normalMaps !== eff.normalMaps || prev.pbr !== eff.pbr) makeTerrainMaterials();
+  if (all || prev.tex !== eff.tex || prev.normalMaps !== eff.normalMaps || prev.pbr !== eff.pbr || prev.mat !== eff.mat) makeTerrainMaterials();
   if (all || prev.water !== eff.water) {
     if (eff.water >= 3 && !R.reflRT) {
       const s = new THREE.Vector2(); G.renderer.getDrawingBufferSize(s);
@@ -426,8 +429,18 @@ export function updateSky(weather = { rain: 0, storm: 0, flash: 0 }, under = 0) 
   U.uFogEnd.value = rdBlocks;
   U.uFogStart.value = rdBlocks * 0.2 * (1 - wet * 0.8);
   U.uFogDensity.value = settings.fog ? (0.75 / rdBlocks) * settings.fogDensity * (1 + wet * 1.6) : wet * 0.01;
-  U.uUnderwater.value = under ? 1 : 0;
+  U.uUnderwater.value = under === 2 ? 2 : under ? 1 : 0;
+  // neblina de vale: de madrugada/manhã e depois da chuva, nas partes baixas
+  const morning = Math.exp(-Math.pow(((G.gameTime + 0.5) % 1 - 0.5 + 0.02) / 0.07, 2));
+  U.uFogValley.value = settings.fog ? (0.55 * morning + 0.25 * (weather.wet || 0)) * settings.fogDensity : 0;
+  U.uFogHeight.value = (G.world ? G.world.sea : 46) + 3;
   U.uUnderColor.value.copy(under === 2 ? PAL.underLava : PAL.under).multiplyScalar(under === 2 ? 1 : 0.25 + 0.75 * day + 0.15);
+  // materiais: chuva/neve/relâmpago/jogador/nuvens
+  U.uWet.value = weather.wet || 0;
+  U.uSnowCover.value = weather.snowCover || 0;
+  U.uFlash.value = weather.flash || 0;
+  if (G.player) { U.uPlayerPos.value.set(G.player.pos.x, G.player.pos.y, G.player.pos.z); U.uSnowCenter.value.copy(U.uPlayerPos.value); }
+  U.uCloudCover.value = R.clouds.visible && R.cloudMat.uniforms.uCover ? R.cloudMat.uniforms.uCover.value : 2;
   R.sky.position.copy(G.camera.position);
   R.clouds.position.set(G.camera.position.x, 112 + (G.world ? G.world.sea - 22 : 0), G.camera.position.z);
   return qa;

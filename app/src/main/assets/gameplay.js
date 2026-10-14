@@ -5,6 +5,7 @@ import { ITEMS, blockDrops, blockItemKey } from './items.js';
 import { raycast } from './physics.js';
 import { Inventory, smeltResult, fuelValue, SMELT_TIME } from './crafting.js';
 import { hash3 } from './noise.js';
+import { wakeAround, ignite } from './worldphys.js';
 
 export const GP = { target: null, entityTarget: null, mining: null, miningHold: false, useCooldown: 0, breakCooldown: 0 };
 const REACH = 5.5;
@@ -182,6 +183,12 @@ export function secondaryAction() {
   // entidades (aldeões, montarias, animais)
   if (GP.entityTarget) { if (hook('useEntity', GP.entityTarget, s)) { pl.swing = 1; return; } }
   const h = GP.target;
+  // isqueiro: acende TNT ou põe fogo na face apontada
+  if (item && item.tool && item.tool.kind === 'igniter' && h) {
+    const ok = w.getBlock(h.x, h.y, h.z) === B.TNT ? ignite(h.x, h.y, h.z) : ignite(h.x + h.face[0], h.y + h.face[1], h.z + h.face[2]);
+    if (ok) { damageHeld(1); hook('sound', 'ignite', { x: h.x + 0.5, y: h.y + 0.5, z: h.z + 0.5 }); pl.swing = 1; }
+    return;
+  }
   // blocos com interação (a não ser agachado colocando bloco)
   if (h && !(pl.sneak && item && item.block)) {
     const d = BLOCKS[h.id];
@@ -291,7 +298,8 @@ function useBucket(item) {
   const h = raycast(GP.eye, GP.dir, REACH, { liquids: true });
   if (!h) return;
   if (item.bucket === 0) {
-    if (LIQUID[h.id]) {
+    // só a fonte (nível 0) enche o balde
+    if (LIQUID[h.id] && w.getMeta(h.x, h.y, h.z) === 0) {
       setBlock(h.x, h.y, h.z, B.AIR, 0);
       const full = h.id === B.WATER ? 'water_bucket' : 'lava_bucket';
       if (G.mode !== 'creative') { consumeHeld(); if (pl.inv.add(full, 1)) hook('dropItem', pl.pos.x, pl.pos.y + 1, pl.pos.z, full, 1); }
@@ -446,18 +454,19 @@ function neighborUpdate(x, y, z, oldId, newId) {
   const d = BLOCKS[newId];
   if (d && d.falls && !SOLID[w.getBlock(x, y - 1, z)]) scheduleTick(x, y, z, 0.05, 'fall');
   if (newId === B.WHEAT && w.getBlock(x, y - 1, z) !== B.FARMLAND) breakBlockAt(x, y, z, false);
+  // líquidos e fogo vizinhos reagem à mudança
+  wakeAround(x, y, z);
   hook('blockChanged', x, y, z, oldId, newId);
 }
 function fallBlock(x, y, z) {
   const w = G.world;
   const id = w.getBlock(x, y, z);
   if (!BLOCKS[id] || !BLOCKS[id].falls) return;
-  let ny = y;
-  while (ny > 1 && !SOLID[w.getBlock(x, ny - 1, z)]) ny--;
-  if (ny === y) return;
+  if (SOLID[w.getBlock(x, y - 1, z)]) return;
+  // vira uma entidade que cai de verdade (com aceleração) e volta a ser bloco ao tocar o chão
+  const meta = w.getMeta(x, y, z);
   setBlock(x, y, z, B.AIR, 0);
-  if (w.getBlock(x, ny, z) && !LIQUID[w.getBlock(x, ny, z)]) hook('dropItem', x + 0.5, ny + 0.5, z + 0.5, BLOCKS[id].key, 1);
-  else setBlock(x, ny, z, id, 0);
+  hook('spawnFalling', x, y, z, id, meta);
 }
 
 // ticks aleatórios: cultivos e mudas crescem, grama se espalha

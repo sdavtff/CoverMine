@@ -28,6 +28,7 @@ export function drawItem(ctx, key, s) {
     case 'sword': line([[2.5, 13.5], [5, 11]], 2, '#5a3d20'); line([[3.6, 9.6], [6.4, 12.4]], 1.4, '#7a5530'); poly([[5, 10], [12.5, 2.5], [14, 2], [13.5, 3.5], [6, 11]], mid, dark); line([[6.2, 9.8], [12.8, 3.2]], 0.6, hi); break;
     case 'hoe': handle(); line([[7, 3], [10, 3.3], [13.5, 6]], 2.4, dark); line([[7, 3], [10, 3.3], [13.5, 6]], 1.2, mid); break;
     case 'bow': ctx.strokeStyle = '#7a5530'; ctx.lineWidth = 1.8 * u; ctx.beginPath(); ctx.arc(3 * u, 13 * u, 10.5 * u, -Math.PI / 2 + 0.05, -0.05); ctx.stroke(); line([[3, 2.5], [13.5, 13]], 0.6, '#ddd'); break;
+    case 'flintsteel': circ(6, 9, 3.8, 'rgba(0,0,0,0)', '#bbb'); line([[6, 5.2], [6, 12.8]], 0.01, '#bbb'); poly([[9, 3], [13, 4], [12.5, 8], [9.5, 8.5]], '#444', '#222'); break;
     case 'shears': line([[4, 12], [12, 4]], 1.6, '#bbb'); line([[4, 4], [12, 12]], 1.6, '#999'); circ(4, 12, 1.6, '#c33'); circ(12, 12, 1.6, '#c33'); break;
     case 'helmet': poly([[3, 9], [3, 6], [5, 3.5], [11, 3.5], [13, 6], [13, 9], [10.5, 9], [10.5, 7], [5.5, 7], [5.5, 9]], mid, dark); break;
     case 'chest': poly([[2, 3], [6, 3], [8, 5], [10, 3], [14, 3], [14, 7], [12, 7], [12, 14], [4, 14], [4, 7], [2, 7]], mid, dark); line([[5, 9], [11, 9]], 0.6, hi); break;

@@ -14,21 +14,23 @@ import { initInput, frameInput, IN } from './input.js';
 import { UI, initHUD, updateHUD, openInventory, openCraftingTable, openChest, openFurnace, openVillager, closeScreen, showDeath, toast, showBlockName, tickScreen, openScreen, el } from './ui.js';
 import { setIconAtlas } from './icons.js';
 import { initHand, updateHand, placeCamera, renderHand, setSkin, HAND } from './hand.js';
-import { E, initEntities, updateEntities, renderEntities, serializeEntities, loadEntities, clearEntities, throwItem, resetItemMeshes, setEntityShadows, shootArrow } from './entities.js';
+import { E, initEntities, updateEntities, renderEntities, serializeEntities, loadEntities, clearEntities, throwItem, resetItemMeshes, setEntityShadows, shootArrow, spawnFallingBlock, spawnPrimedTNT, explosionDamage } from './entities.js';
 import * as PT from './particles.js';
 import { initWeather, updateWeather, weatherJSON, loadWeather, weatherMesh, W } from './weather.js';
 import * as MECH from './mechanics.js';
-import { playSound, footstep, unlockAudio, setVolume, setRain } from './audio.js';
+import { playSound, footstep, unlockAudio, setVolume, setRain, updateListener } from './audio.js';
 import { MAP, exploreChunk, updateExploredColumn, updateMinimap, mapJSON, loadMap, openMapScreen, addPOI, resetMapColors } from './mapview.js';
 import { CH, challengeEvent, challengeJSON, loadChallenge, currentObjective } from './challenge.js';
 import { saveWorld, loadWorld, migrateLegacy, listWorlds } from './saves.js';
 import { showTitle, showPause, hideMenu, MENU, MODES } from './menus.js';
-import { renderFrame } from './postfx.js';
+import { renderFrame, beginCameraFrame, resetHistory } from './postfx.js';
 import { Inventory } from './crafting.js';
 import { BIOME, BIOME_NAMES } from './worldgen.js';
 import { SKIN_PRESETS } from './models.js';
 import { NET, joinServer, netTick, netHitMob } from './net.js';
 import { askText, askChoice, showMessage } from './dialog.js';
+import { initAmbient, updateAmbient } from './ambient.js';
+import { updateWorldPhysics, explode, clearWorldPhysics, ignite } from './worldphys.js';
 import { PHOTO, enterPhoto, exitPhoto, photoCamera, photoAfterRender, BENCH, startBenchmark, benchCamera, benchBegin, benchEnd, benchResult, benchText } from './tools.js';
 G.net = NET;
 
@@ -55,6 +57,7 @@ async function boot() {
   setIconAtlas(R.atlas, R.atlasCanvas, R.uv);
   initHand();
   PT.initParticles(G.scene);
+  initAmbient(G.scene);
   PT.setParticleDensity(G.eff.particles ?? 1);
   initWeather(G.scene);
   initEntities();
@@ -81,7 +84,7 @@ function wireHooks() {
   H.setBlock = (x, y, z, id, m) => setBlock(x, y, z, id, m);
   H.breakBlock = (x, y, z) => breakBlockAt(x, y, z, false);
   H.sound = (n, a, b) => playSound(n, a, b);
-  H.footstep = (id) => footstep(id);
+  H.footstep = (id) => footstep(id, G.player && G.player.inWater);
   H.toast = (m) => toast(m);
   H.particles = (x, y, z, id) => { const d = BLOCKS[id]; const c = d && R.atlas ? R.atlas.avg[d.t[1]] : [0.5, 0.5, 0.5]; PT.burstBlock(x, y, z, c); };
   H.openScreen = (type, d) => {
@@ -127,6 +130,12 @@ function wireHooks() {
   H.netHitMob = (e, dmg) => netHitMob(e, dmg);
   H.startNetWorld = async (meta, data) => { await startWorld(meta, data, { net: true }); };
   H.createRoom = (...a) => createRoom(...a);
+  H.spawnFalling = (x, y, z, id, meta) => spawnFallingBlock(x, y, z, id, meta);
+  H.primeTNT = (x, y, z, fuse) => spawnPrimedTNT(x, y, z, fuse);
+  H.explode = (x, y, z, p) => explode(x, y, z, p);
+  H.explosionDamage = (x, y, z, p) => explosionDamage(x, y, z, p);
+  H.cameraShake = (a) => { CAMM.shake = Math.max(CAMM.shake || 0, a); };
+  H.ignite = (x, y, z) => ignite(x, y, z);
   H.runBenchmark = () => runBenchmark();
   H.photoMode = () => { resumeGame(); setTimeout(() => actions.photo(), 50); };
 }
@@ -235,6 +244,7 @@ export async function startWorld(meta, data, opts = {}) {
   if (!data || !data.player) spawnAt(p, w.spawn);
   R.needKey = '';
   R.shadowDirty = true;
+  resetHistory();
   setLoading('');
   hideMenu();
   G.playing = true; G.paused = false;
@@ -300,6 +310,7 @@ window.saveGame = () => { saveNow(); saveSettings(); };
 function stopWorld() {
   if (!G.world) return;
   exitPhoto();
+  clearWorldPhysics();
   for (const c of G.world.chunks.values()) disposeChunkMeshes(c);
   G.world.dispose();
   clearEntities();
@@ -351,7 +362,7 @@ async function onSettingsChanged(key, noSave) {
   if (key === 'uiScale' || key === 'showInfo' || key === 'highContrast') { applyUIScale(); return; }
   if (key === 'skin') { setSkin(S.skin); return; }
   if (key === 'name') { if (G.player) G.player.name = S.name; NET.sendProfile(); return; }
-  if (['camDefault', 'lastServer', 'lastRoom', 'netKey', 'benchHistory', 'autoUpdate'].includes(key)) return;
+  if (['camDefault', 'lastServer', 'lastRoom', 'netKey', 'benchHistory', 'autoUpdate', 'audio3d'].includes(key)) return;
   const needReload = await applyGraphics(key);
   applyNeedsReload = needReload;
   PT.setParticleDensity(G.eff.particles ?? 1);
@@ -371,6 +382,45 @@ function applyUIScale() {
   document.body.classList.toggle('hc', !!S.highContrast);
   $('info').style.display = S.showInfo === false ? 'none' : '';
   $('compass').style.display = S.compass === false ? 'none' : '';
+}
+
+// câmera viva: balanço ao andar (vertical + lateral + leve inclinação), impacto ao pousar e
+// suavização ao subir degraus
+const CAMM = { landKick: 0, landVel: 0, wasGround: true, prevVy: 0, smoothY: null, shake: 0 };
+function cameraMotion(cam, p, dt) {
+  const bobOn = G.settings.viewBob !== false && p.camMode === 0;
+  // pouso: quanto maior a queda, maior a "afundada" da câmera (mola amortecida)
+  if (p.onGround && !CAMM.wasGround && CAMM.prevVy < -5 && !p.fly) CAMM.landVel -= Math.min(2.2, -CAMM.prevVy * 0.12);
+  CAMM.wasGround = p.onGround; CAMM.prevVy = p.vel.y;
+  CAMM.landVel += (-CAMM.landKick * 70 - CAMM.landVel * 11) * dt;
+  CAMM.landKick += CAMM.landVel * dt;
+  if (bobOn) cam.position.y += CAMM.landKick * 0.6;
+  // degraus: suaviza subidas de até 1 bloco
+  if (CAMM.smoothY == null || Math.abs(cam.position.y - CAMM.smoothY) > 1.2 || p.camMode !== 0) CAMM.smoothY = cam.position.y;
+  CAMM.smoothY += (cam.position.y - CAMM.smoothY) * Math.min(1, dt * 18);
+  if (p.camMode === 0 && p.onGround) cam.position.y = Math.min(cam.position.y, CAMM.smoothY + 0.0);
+  // tremor de câmera (explosões)
+  if (CAMM.shake > 0) {
+    CAMM.shake = Math.max(0, CAMM.shake - dt * 1.6);
+    const a = CAMM.shake * CAMM.shake * 0.18;
+    cam.position.x += (Math.random() - 0.5) * a; cam.position.y += (Math.random() - 0.5) * a; cam.rotation.z += (Math.random() - 0.5) * a * 0.3;
+  }
+  if (!bobOn || !p.onGround || p.fly) return;
+  const sp = Math.min(1, Math.hypot(p.vel.x, p.vel.z) / 4);
+  if (sp < 0.01) return;
+  const ph = p.walkDist * 2.4;
+  cam.position.y += Math.abs(Math.sin(ph)) * 0.045 * sp;
+  // lateral: perpendicular ao olhar
+  const side = Math.cos(ph) * 0.025 * sp;
+  cam.position.x += Math.cos(p.yaw) * side; cam.position.z -= Math.sin(p.yaw) * side;
+  cam.rotation.z += Math.cos(ph) * 0.006 * sp;
+}
+
+// há céu aberto acima deste ponto? (gotas de chuva na lente só a céu aberto)
+function skyOpen(pos) {
+  const w = G.world, x = Math.floor(pos.x), z = Math.floor(pos.z);
+  for (let y = Math.floor(pos.y) + 1; y < Math.min(127, Math.floor(pos.y) + 40); y++) if (SOLID[w.getBlock(x, y, z)] || LIQUID[w.getBlock(x, y, z)]) return false;
+  return true;
 }
 
 // ---------------- benchmark ----------------
@@ -401,7 +451,7 @@ async function createRoom(addr, room, pass, source, status) {
     joinServer(addr, room, pass, (m) => m && toast(m), upload);
   } else {
     // mundo novo: o mundo é montado quando o servidor confirma a sala (mensagem "welcome")
-    joinServer(addr, room, pass, status, null, { name: source.name, seed: source.seed, mode: source.mode, gen: source.gen || 3 });
+    joinServer(addr, room, pass, status, null, { name: source.name, seed: source.seed, mode: source.mode, gen: source.gen || 4 });
   }
 }
 
@@ -524,6 +574,7 @@ function loop(now) {
       MECH.updatePlates(tickDt, [p, ...E.list.filter((e) => e.kind === 'mob' && !e.dead)]);
       updateFurnaces(tickDt);
       updateTicks(tickDt);
+      updateWorldPhysics(tickDt);
       randomTicks(tickDt * (W.local > 0.3 ? 1.6 : 1));
       tickScreen();
       // noites sobrevividas (para o modo desafio)
@@ -536,7 +587,7 @@ function loop(now) {
   if (BENCH.on) camDone = benchCamera(cam, dt);
   else if (PHOTO.on) photoCamera(cam, rawInput, dt);
   else placeCamera(cam);
-  if (!camOnly && G.settings.viewBob !== false && p.camMode === 0 && p.onGround && !p.fly) cam.position.y += Math.abs(Math.sin(p.walkDist * 2.4)) * 0.04 * Math.min(1, Math.hypot(p.vel.x, p.vel.z) / 4);
+  if (!camOnly) cameraMotion(cam, p, dt);
   cam.updateMatrixWorld();
   if (active && !camOnly) { updateTarget(); updateMining(dt); }
   else { GP.target = null; GP.entityTarget = null; }
@@ -546,7 +597,10 @@ function loop(now) {
   $('lava-overlay').style.display = headLiq === 2 ? 'block' : 'none';
   updateChunks(G.playing ? 5 : 10, camOnly ? cam.position : p.pos);
   PT.updateParticles(dt);
+  updateAmbient(dt);
+  updateListener(cam, dt);
   const wx = updateWeather(dt);
+  G.weatherNow = wx;
   if (G.settings.reduceFlash) wx.flash *= 0.25;
   const qa = updateSky(wx, headLiq);
   updateShadows(false, dt);
@@ -560,6 +614,7 @@ function loop(now) {
     if (bm !== lastBiome) { lastBiome = bm; questEvent('biome', bm); }
   }
   // quadro
+  beginCameraFrame(cam);
   benchBegin();
   // raios de sol: mais fortes com o sol baixo (manhã e fim de tarde), somem com chuva e à noite
   const sk = R.sky01, low = sk ? Math.exp(-Math.pow((sk.sunY - 0.15) / 0.25, 2)) : 0;
@@ -570,7 +625,10 @@ function loop(now) {
     renderReflection([weatherMesh(), PT.particleMesh()]);
     r.setRenderTarget(target);
     r.render(G.scene, cam);
-  }, { flash: wx.flash * 0.15, vignette: p.health <= 4 && G.mode !== 'creative' && !camOnly ? 0.4 : 0, overlay: () => renderHand(G.renderer), sunDir, rays });
+  }, { flash: wx.flash * 0.15, vignette: p.health <= 4 && G.mode !== 'creative' && !camOnly ? 0.4 : 0, overlay: () => renderHand(G.renderer), sunDir, rays,
+    sunVisible: sk ? sk.day * (1 - Math.max(wx.rain || 0, wx.storm || 0)) : 0,
+    // gotas na lente: chovendo, com o céu acima da câmera e olhando para frente/cima
+    lensRain: (wx.rain || 0) > 0.15 && !headLiq && w.getBlock(Math.floor(cam.position.x), Math.floor(cam.position.y) + 1, Math.floor(cam.position.z)) === 0 && skyOpen(cam.position) ? Math.min(1, wx.rain * 1.4) * (0.4 + 0.6 * Math.max(0, Math.min(1, (p.pitch + 0.4) * 1.5))) : 0 });
   benchEnd(rawFrameMs);
   photoAfterRender(G.renderer.domElement);
   if (camDone) finishBenchmark();
