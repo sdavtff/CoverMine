@@ -22,6 +22,12 @@ multiplayer em rede local e atualização automática.
 
 ## Novidades da 3.1
 
+| | |
+|---|---|
+| ![Skins](docs/screenshots/v31-skins.jpg) | ![Salas](docs/screenshots/v31-salas.jpg) |
+| ![Raios de sol](docs/screenshots/v31-raios-de-sol.jpg) | ![Ultra](docs/screenshots/v31-ultra.jpg) |
+| ![Chuva molhada](docs/screenshots/v31-chuva-molhada.jpg) | ![Neve acumulada](docs/screenshots/v31-neve-acumulada.jpg) |
+
 **Skins:** 20 skins prontas (explorador, cavaleiro, astronauta, pirata, rei, rainha, mago, bombeira,
 robô, zumbi...), roupas (manga longa, listrada, camisa de time, jaleco, macacão, jardineira, armadura,
 túnica, vestido, rasgada), chapéus (boné, capacete, coroa, capuz, faixa, capacete com viseira), barba,
