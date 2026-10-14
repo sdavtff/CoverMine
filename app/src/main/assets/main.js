@@ -3,7 +3,7 @@
 import * as THREE from './lib/three.module.min.js';
 import { G, hook } from './state.js';
 import { loadSettings, saveSettings as storeSettings, effective, PRESET_ORDER, PRESET_NAMES, applyPreset } from './graphics.js';
-import { R, initRenderer, applyGraphics, resize, updateChunks, onBlockEdited, onWorkerMeshed, updateSky, updateShadows, renderReflection, updateEnv, showSelection, disposeChunkMeshes, rebuildAllChunks } from './render.js';
+import { R, sunDir, initRenderer, applyGraphics, resize, updateChunks, onBlockEdited, onWorkerMeshed, updateSky, updateShadows, renderReflection, updateEnv, showSelection, disposeChunkMeshes, rebuildAllChunks } from './render.js';
 import { U } from './shaders.js';
 import { World } from './world.js';
 import { B, BLOCKS, LIQUID, SOLID, FACING } from './blocks.js';
@@ -27,7 +27,9 @@ import { renderFrame } from './postfx.js';
 import { Inventory } from './crafting.js';
 import { BIOME, BIOME_NAMES } from './worldgen.js';
 import { SKIN_PRESETS } from './models.js';
-import { NET, joinServer, netTick, hostPick, netHitMob } from './net.js';
+import { NET, joinServer, netTick, netHitMob } from './net.js';
+import { askText, askChoice, showMessage } from './dialog.js';
+import { PHOTO, enterPhoto, exitPhoto, photoCamera, photoAfterRender, BENCH, startBenchmark, benchCamera, benchBegin, benchEnd, benchResult, benchText } from './tools.js';
 G.net = NET;
 
 const $ = (id) => document.getElementById(id);
@@ -113,11 +115,10 @@ function wireHooks() {
   H.chunkMeshed = (c) => { const p = G.player; if (p && Math.abs(c.cx * 16 + 8 - p.pos.x) < 16 * 5 && Math.abs(c.cz * 16 + 8 - p.pos.z) < 16 * 5) exploreChunk(c); };
   H.netCanEdit = (x, y, z) => NET.canEdit(x, y, z);
   H.netBlock = (x, y, z, id, m, oid, om) => NET.sendBlock(x, y, z, id, m, oid, om);
-  H.settingsChanged = (key) => onSettingsChanged(key);
+  H.settingsChanged = (key, noSave) => onSettingsChanged(key, noSave);
   H.settingsClosed = () => { saveSettings(); };
   H.openWorld = (w) => openWorld(w);
   H.joinServer = (addr, room, pass, status) => joinServer(addr, room, pass, status);
-  H.hostPick = () => hostPick();
   H.remotePlayers = () => NET.remoteList();
   H.questAccepted = () => { G.world.dirty = true; };
   H.lightning = () => {};
@@ -125,7 +126,9 @@ function wireHooks() {
   H.keyInField = () => {};
   H.netHitMob = (e, dmg) => netHitMob(e, dmg);
   H.startNetWorld = async (meta, data) => { await startWorld(meta, data, { net: true }); };
-  H.hostPickWorld = () => hostPickWorld();
+  H.createRoom = (...a) => createRoom(...a);
+  H.runBenchmark = () => runBenchmark();
+  H.photoMode = () => { resumeGame(); setTimeout(() => actions.photo(), 50); };
 }
 
 // ---------------- ações do jogador (entrada) ----------------
@@ -153,8 +156,9 @@ const actions = {
   camera() { if (!G.player) return; G.player.camMode = (G.player.camMode + 1) % 3; },
   map() { if (!G.playing) return; if (UI.screen) { actions.closeScreen(); return; } openMapScreen(openScreen, el); if (document.pointerLockElement) document.exitPointerLock(); },
   chat() { if (NET.connected) NET.openChat(); else if (G.isTouch) toast('O chat funciona no multiplayer.'); },
-  menu() { if (UI.screen) { actions.closeScreen(); return; } if (G.playing) pauseGame(); },
+  menu() { if (UI.screen) { actions.closeScreen(); return; } if (PHOTO.on) { exitPhoto(); return; } if (G.playing) pauseGame(); },
   closeScreen() { G.hooks.closeScreen(); },
+  photo() { if (!G.world || !G.player) return; if (PHOTO.on) exitPhoto(); else { if (UI.screen) actions.closeScreen(); enterPhoto(); } },
   dropHeld(all) { const p = G.player; const s = p && p.held(); if (!s) return; const n = all ? s.n : 1; throwItem(s.k, n, s.d); s.n -= n; if (!s.n) p.inv.set(p.selected, null); p.inv.changed = true; },
 };
 function shootBow() {
@@ -188,7 +192,7 @@ async function openWorld(meta) {
   } catch (e) {
     console.error(e);
     setLoading('');
-    alert('Não foi possível abrir o mundo: ' + e.message);
+    showMessage('Não foi possível abrir o mundo: ' + e.message);
   }
 }
 export async function startWorld(meta, data, opts = {}) {
@@ -279,7 +283,7 @@ function serializeBlockData(w) {
 }
 let lastSave = 0, saving = false;
 async function saveNow() {
-  if (!G.world || !current || saving || NET.isClient()) return;
+  if (!G.world || !current || saving || NET.isClient() || (current.meta && (current.meta.net || current.meta.bench))) return;
   saving = true;
   try {
     const data = {
@@ -295,6 +299,7 @@ async function saveNow() {
 window.saveGame = () => { saveNow(); saveSettings(); };
 function stopWorld() {
   if (!G.world) return;
+  exitPhoto();
   for (const c of G.world.chunks.values()) disposeChunkMeshes(c);
   G.world.dispose();
   clearEntities();
@@ -336,8 +341,9 @@ window.addEventListener('resize', () => { resize(); applyUIScale(); });
 
 // ---------------- configurações ----------------
 let applyNeedsReload = false;
-async function onSettingsChanged(key) {
-  saveSettings();
+async function onSettingsChanged(key, noSave) {
+  // modo foto: qualidade máxima temporária, não vai para o armazenamento
+  if (!noSave && key !== 'photo') saveSettings();
   const S = G.settings;
   if (key === 'sens' || key === 'invertY' || key === 'minimap' || key === 'compass' || key === 'viewBob' || key === 'reduceFlash') { applyUIScale(); return; }
   if (key === 'fov') { G.camera.fov = S.fov; G.camera.updateProjectionMatrix(); return; }
@@ -345,7 +351,7 @@ async function onSettingsChanged(key) {
   if (key === 'uiScale' || key === 'showInfo' || key === 'highContrast') { applyUIScale(); return; }
   if (key === 'skin') { setSkin(S.skin); return; }
   if (key === 'name') { if (G.player) G.player.name = S.name; NET.sendProfile(); return; }
-  if (key === 'camDefault' || key === 'lastServer') return;
+  if (['camDefault', 'lastServer', 'lastRoom', 'netKey', 'benchHistory', 'autoUpdate'].includes(key)) return;
   const needReload = await applyGraphics(key);
   applyNeedsReload = needReload;
   PT.setParticleDensity(G.eff.particles ?? 1);
@@ -367,22 +373,36 @@ function applyUIScale() {
   $('compass').style.display = S.compass === false ? 'none' : '';
 }
 
-// ---------------- hospedar sala (versão PC) ----------------
-async function hostPickWorld() {
-  const worlds = await listWorlds();
-  if (!worlds.length) { alert('Crie um mundo primeiro.'); return; }
-  const names = worlds.map((w, i) => `${i + 1}. ${w.name}`).join('\n');
-  const pick = prompt('Qual mundo hospedar? Digite o número:\n' + names, '1');
-  const w = worlds[(parseInt(pick, 10) || 0) - 1];
-  if (!w) return;
-  const room = prompt('Nome da sala:', 'principal') || 'principal';
-  const pass = prompt('Senha (deixe vazio para sala aberta):', '') || '';
-  const info = await window.vcDesktop.host(8765);
-  if (!info || !info.ok) { alert('Não foi possível iniciar o servidor: ' + (info && info.error)); return; }
-  await openWorld(w);
-  const upload = { seed: G.world.seed, gen: G.world.genVersion, mode: G.mode, edits: G.world.serializeEdits(), time: G.gameTime, weather: W.state };
-  joinServer('localhost:8765', room, pass, (m) => m && toast(m), upload);
-  toast(`Sala "${room}" aberta. Endereço para os amigos: ${info.addresses.join(' ou ')}`);
+// ---------------- benchmark ----------------
+async function runBenchmark() {
+  await startWorld({ id: 'bench', name: 'Benchmark', seed: 777, mode: 'creative', gen: 3, slot: -1, bench: true }, null);
+  G.player.fly = true; G.player.camMode = 1;
+  document.body.classList.add('bench');
+  const sp = G.world.spawn;
+  startBenchmark({ x: sp.x, y: Math.max(sp.y, G.world.sea + 2), z: sp.z });
+}
+async function finishBenchmark() {
+  const r = benchResult();
+  document.body.classList.remove('bench');
+  await quitToTitle();
+  if (r) showMessage(benchText(r), 'Resultado do benchmark');
+}
+
+// ---------------- criar sala multiplayer ----------------
+// source: { type: 'new', name, seed, mode, gen } ou { type: 'saved', id }
+async function createRoom(addr, room, pass, source, status) {
+  status = status || (() => {});
+  if (source.type === 'saved') {
+    const w = (await listWorlds()).find((x) => x.id === source.id);
+    if (!w) { status('Mundo não encontrado.'); return; }
+    await openWorld(w);
+    if (!G.world) return;
+    const upload = { name: w.name, seed: G.world.seed, gen: G.world.genVersion, mode: G.mode, edits: G.world.serializeEdits(), time: G.gameTime, weather: W.state };
+    joinServer(addr, room, pass, (m) => m && toast(m), upload);
+  } else {
+    // mundo novo: o mundo é montado quando o servidor confirma a sala (mensagem "welcome")
+    joinServer(addr, room, pass, status, null, { name: source.name, seed: source.seed, mode: source.mode, gen: source.gen || 3 });
+  }
 }
 
 // ---------------- cama, morte, missões ----------------
@@ -469,6 +489,7 @@ function loop(now) {
   if (R.lost) return;
   if (G.eff.fpsCap && now - lastFrame < 1000 / G.eff.fpsCap - 2) return;
   lastFrame = now;
+  const rawFrameMs = now - last;
   const dt = Math.max(0, Math.min(0.1, (now - last) / 1000));
   last = now;
   G.time = now / 1000;
@@ -487,7 +508,10 @@ function loop(now) {
   }
   const w = G.world, p = G.player;
   const active = G.playing && !G.paused;
-  const input = active ? frameInput() : { mx: 0, mz: 0, jump: false, sneak: false, sprint: false };
+  const rawInput = active ? frameInput() : { mx: 0, mz: 0, jump: false, sneak: false, sprint: false };
+  // no modo foto e no benchmark o jogador fica parado (os comandos movem só a câmera)
+  const camOnly = PHOTO.on || BENCH.on;
+  const input = camOnly ? { mx: 0, mz: 0, jump: false, sneak: false, sprint: false } : rawInput;
   // simulação
   if (G.playing) {
     const tickDt = G.paused && !NET.connected ? 0 : dt;
@@ -508,21 +532,24 @@ function loop(now) {
       wasNight = night;
     }
   }
-  placeCamera(cam);
-  if (G.settings.viewBob !== false && p.camMode === 0 && p.onGround && !p.fly) cam.position.y += Math.abs(Math.sin(p.walkDist * 2.4)) * 0.04 * Math.min(1, Math.hypot(p.vel.x, p.vel.z) / 4);
+  let camDone = false;
+  if (BENCH.on) camDone = benchCamera(cam, dt);
+  else if (PHOTO.on) photoCamera(cam, rawInput, dt);
+  else placeCamera(cam);
+  if (!camOnly && G.settings.viewBob !== false && p.camMode === 0 && p.onGround && !p.fly) cam.position.y += Math.abs(Math.sin(p.walkDist * 2.4)) * 0.04 * Math.min(1, Math.hypot(p.vel.x, p.vel.z) / 4);
   cam.updateMatrixWorld();
-  if (active) { updateTarget(); updateMining(dt); }
+  if (active && !camOnly) { updateTarget(); updateMining(dt); }
   else { GP.target = null; GP.entityTarget = null; }
   showSelection(active && !p.dead ? GP.target : null, GP.mining ? GP.mining.p : 0);
   const headLiq = LIQUID[w.getBlock(Math.floor(cam.position.x), Math.floor(cam.position.y), Math.floor(cam.position.z))];
   $('water-overlay').style.display = headLiq === 1 ? 'block' : 'none';
   $('lava-overlay').style.display = headLiq === 2 ? 'block' : 'none';
-  updateChunks(G.playing ? 5 : 10, p.pos);
+  updateChunks(G.playing ? 5 : 10, camOnly ? cam.position : p.pos);
   PT.updateParticles(dt);
   const wx = updateWeather(dt);
   if (G.settings.reduceFlash) wx.flash *= 0.25;
   const qa = updateSky(wx, headLiq);
-  updateShadows(false);
+  updateShadows(false, dt);
   updateEnv(qa);
   renderEntities();
   updateHand(dt);
@@ -533,14 +560,20 @@ function loop(now) {
     if (bm !== lastBiome) { lastBiome = bm; questEvent('biome', bm); }
   }
   // quadro
+  benchBegin();
+  // raios de sol: mais fortes com o sol baixo (manhã e fim de tarde), somem com chuva e à noite
+  const sk = R.sky01, low = sk ? Math.exp(-Math.pow((sk.sunY - 0.15) / 0.25, 2)) : 0;
+  const rays = sk ? (0.2 + 0.45 * low) * sk.day * (1 - Math.max(wx.rain || 0, wx.storm || 0) * 0.9) * (headLiq ? 0 : 1) : 0;
   renderFrame((target) => {
     const r = G.renderer;
     r.setRenderTarget(target);
     renderReflection([weatherMesh(), PT.particleMesh()]);
     r.setRenderTarget(target);
     r.render(G.scene, cam);
-    renderHand(r);
-  }, { flash: wx.flash * 0.15, vignette: p.health <= 4 && G.mode !== 'creative' ? 0.4 : 0 });
+  }, { flash: wx.flash * 0.15, vignette: p.health <= 4 && G.mode !== 'creative' && !camOnly ? 0.4 : 0, overlay: () => renderHand(G.renderer), sunDir, rays });
+  benchEnd(rawFrameMs);
+  photoAfterRender(G.renderer.domElement);
+  if (camDone) finishBenchmark();
   // HUD
   updateHUD();
   updateMinimap(dt);

@@ -26,6 +26,8 @@ export const U = {
   uAmbient: { value: new THREE.Color(0.5, 0.6, 0.8) },
   uShadowCenter: { value: new THREE.Vector3() },
   uShadowRange: { value: 1e6 },
+  uStarRot: { value: 0 },
+  uMoonPhase: { value: 0.5 },
 };
 
 // ---------------- GLSL comum: céu + neblina ----------------
@@ -37,6 +39,8 @@ uniform vec3 uSunGlow;
 uniform vec3 uSunDisc;
 uniform float uNight;
 uniform float uTime;
+uniform float uStarRot;
+uniform float uMoonPhase;
 float vcHash3(vec3 p) {
   p = fract(p * 0.3183099 + vec3(0.11, 0.17, 0.13));
   p *= 17.0;
@@ -57,11 +61,19 @@ vec3 vcSky(vec3 d, float discs) {
     col += uSunGlow * pow(sd, 900.0) * 3.0 * above;
     float md = max(dot(d, -uSunDir), 0.0);
     float moon = smoothstep(0.99905, 0.99935, md);
+    // fase da lua: a linha de sombra atravessa o disco conforme os dias passam
+    vec3 mDir = -uSunDir, mT = normalize(cross(mDir, vec3(0.0, 0.0, 1.0)));
+    float mu = dot(d - mDir * md, mT) / 0.036;
+    float term = cos(uMoonPhase * 6.2831853);
+    float lit = uMoonPhase < 0.5 ? smoothstep(term - 0.08, term + 0.08, mu) : smoothstep(term - 0.08, term + 0.08, -mu);
     float crater = 0.8 + 0.2 * vcHash3(floor(d * 900.0));
-    col += vec3(0.75, 0.82, 1.0) * moon * crater * (0.15 + 1.1 * uNight) * above;
+    col += vec3(0.75, 0.82, 1.0) * moon * crater * (0.06 + 0.94 * lit) * (0.15 + 1.1 * uNight) * above;
     col += vec3(0.06, 0.08, 0.14) * pow(md, 300.0) * uNight;
     if (uNight > 0.01 && y > 0.0) {
-      vec3 g = floor(d * 170.0);
+      // estrelas giram com a hora (eixo do movimento do sol)
+      float cr = cos(uStarRot), sr = sin(uStarRot);
+      vec3 ds = vec3(d.x * cr - d.y * sr, d.x * sr + d.y * cr, d.z);
+      vec3 g = floor(ds * 170.0);
       float s = vcHash3(g);
       float tw = 0.6 + 0.4 * sin(uTime * (1.5 + s * 3.0) + s * 80.0);
       col += vec3(step(0.9972, s) * tw * 1.4) * uNight * smoothstep(0.0, 0.2, y);
@@ -384,10 +396,15 @@ const TERRAIN_LIGHT_GLSL = /* glsl */`
   float vcFlags = floor(vLight.w * 255.0 + 0.5);
   float vcAO = vLight.x;
   float skyB = pow(0.78, 15.0 * (1.0 - vLight.y));
-  float blkB = pow(0.8, 15.0 * (1.0 - vLight.z)) * step(0.01, vLight.z);
+  // luz de blocos: o flood fill dá a distância (em blocos) até a fonte; queda ~1/d² suavizada
+  float vcLvl = vLight.z * 15.0, vcD = 15.0 - vcLvl;
+  float blkB = smoothstep(0.0, 1.5, vcLvl) / (1.0 + 0.09 * vcD * vcD);
+  // tremulação leve (chama) que varia por região
+  blkB *= 1.0 + 0.05 * sin(uTime * 10.0 + vcHash3(floor(vWorldP * 0.25)) * 40.0) * smoothstep(0.0, 4.0, vcLvl);
   float sunVis = smoothstep(0.6, 0.95, vLight.y);
-  reflectedLight.directDiffuse *= sunVis * mix(1.0, vcAO, 0.45);
-  reflectedLight.directSpecular *= sunVis * vcAO;
+  // o sol já vem multiplicado pela visibilidade do céu (csmLightsChunk); aqui só o AO por vértice
+  reflectedLight.directDiffuse *= mix(1.0, vcAO, 0.45);
+  reflectedLight.directSpecular *= vcAO;
   reflectedLight.indirectDiffuse *= max(skyB, uMinLight) * vcAO;
   reflectedLight.indirectSpecular *= skyB * vcAO;
   reflectedLight.indirectDiffuse += diffuseColor.rgb * uTorchColor * blkB * mix(1.0, vcAO, 0.6);
@@ -400,6 +417,56 @@ const TERRAIN_LIGHT_GLSL = /* glsl */`
 
 const SHADOW_CALL = 'getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] )';
 
+// Substitui o laço de luzes direcionais do three.js por sombras em cascata (CSM): a luz 0 é o sol;
+// as luzes 1 e 2 (intensidade zero) só existem para ter mais mapas de sombra. Para cada fragmento usa a
+// cascata mais detalhada que o contém, misturando com a próxima perto da borda (sem "degrau" visível).
+// dirMul: multiplicador da luz direta (no terreno, a visibilidade do céu: dentro de cavernas o sol não entra).
+export function csmLightsChunk(dirMul) {
+  const src = THREE.ShaderChunk.lights_fragment_begin;
+  const a = src.indexOf('#if ( NUM_DIR_LIGHTS > 0 ) && defined( RE_Direct )');
+  const end = src.indexOf('#pragma unroll_loop_end', a);
+  const b = src.indexOf('#endif', end) + '#endif'.length;
+  const block = src.slice(a, b);
+  const call = (block.match(/RE_Direct\([^;]*\);/) || ['RE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );'])[0];
+  const csm = `#if ( NUM_DIR_LIGHTS > 0 ) && defined( RE_Direct )
+{
+  float vcSh = 1.0;
+  #if defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0
+  {
+    DirectionalLightShadow directionalLightShadow;
+    bool vcFound = false; float vcPend = -1.0; float vcPW = 0.0;
+    #pragma unroll_loop_start
+    for ( int i = 0; i < NUM_DIR_LIGHT_SHADOWS; i ++ ) {
+      if ( !vcFound ) {
+        vec3 vcP = vDirectionalShadowCoord[ i ].xyz / vDirectionalShadowCoord[ i ].w;
+        float vcEdge = min( min( vcP.x, 1.0 - vcP.x ), min( vcP.y, 1.0 - vcP.y ) );
+        if ( vcEdge > 0.0 && vcP.z < 1.0 ) {
+          directionalLightShadow = directionalLightShadows[ i ];
+          float vcS = ${SHADOW_CALL};
+          if ( vcPend >= 0.0 ) { vcSh = mix( vcS, vcPend, vcPW ); vcFound = true; }
+          else if ( vcEdge > 0.08 ) { vcSh = vcS; vcFound = true; }
+          else { vcPend = vcS; vcPW = vcEdge / 0.08; }
+        }
+      }
+    }
+    #pragma unroll_loop_end
+    if ( !vcFound && vcPend >= 0.0 ) vcSh = mix( 1.0, vcPend, vcPW );
+  }
+  #endif
+  DirectionalLight directionalLight = directionalLights[ 0 ];
+  getDirectionalLightInfo( directionalLight, directLight );
+  directLight.color *= ( receiveShadow ? vcSh : 1.0 ) * ( ${dirMul} );
+  ${call}
+}
+#endif`;
+  return src.slice(0, a) + csm + src.slice(b);
+}
+
+let _terrainLights = null;
+const TERRAIN_LIGHTS_BEGIN = () => _terrainLights || (_terrainLights = csmLightsChunk('smoothstep(0.6, 0.95, vLight.y)'));
+let _entityLights = null;
+const ENTITY_LIGHTS_BEGIN = () => _entityLights || (_entityLights = csmLightsChunk('1.0'));
+
 export function patchTerrainMaterial(mat) {
   mat.fog = false;
   mat.onBeforeCompile = (shader) => {
@@ -409,11 +476,8 @@ export function patchTerrainMaterial(mat) {
     shader.vertexShader = TERRAIN_VERT_PARS + shader.vertexShader
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLight = aLight;\n' + WIND_GLSL)
       .replace('#include <project_vertex>', '#include <project_vertex>\nvWorldP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-    const lightsBegin = THREE.ShaderChunk.lights_fragment_begin.replace(SHADOW_CALL,
-      `mix( ${SHADOW_CALL}, 1.0, vcShadowFade )`);
     shader.fragmentShader = TERRAIN_FRAG_PARS + shader.fragmentShader
-      .replace('#include <lights_fragment_begin>',
-        'float vcShadowFade = smoothstep(uShadowRange * 0.7, uShadowRange * 0.95, max(abs(vWorldP.x - uShadowCenter.x), abs(vWorldP.z - uShadowCenter.z)));\n' + lightsBegin)
+      .replace('#include <lights_fragment_begin>', TERRAIN_LIGHTS_BEGIN())
       .replace('#include <aomap_fragment>', '#include <aomap_fragment>\n' + TERRAIN_LIGHT_GLSL)
       .replace('#include <opaque_fragment>', '#include <opaque_fragment>\ngl_FragColor.rgb = vcFog(gl_FragColor.rgb, vWorldP);');
   };
@@ -442,6 +506,7 @@ export function patchEntityMaterial(mat) {
     shader.vertexShader = 'varying vec3 vWorldP;\n' + shader.vertexShader
       .replace('#include <project_vertex>', '#include <project_vertex>\n{ vec4 wp4 = vec4(transformed, 1.0);\n#ifdef USE_INSTANCING\n wp4 = instanceMatrix * wp4;\n#endif\n vWorldP = (modelMatrix * wp4).xyz; }');
     shader.fragmentShader = SKY_GLSL + FOG_GLSL + 'varying vec3 vWorldP;\n' + shader.fragmentShader
+      .replace('#include <lights_fragment_begin>', ENTITY_LIGHTS_BEGIN())
       .replace('#include <opaque_fragment>', '#include <opaque_fragment>\ngl_FragColor.rgb = vcFog(gl_FragColor.rgb, vWorldP);');
   };
   mat.customProgramCacheKey = () => 'vc-entity';

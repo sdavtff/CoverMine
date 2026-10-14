@@ -1,5 +1,6 @@
 // Mapa do mundo: áreas exploradas (por chunk), marcadores, pontos de interesse, minimapa e tela de mapa.
 import { G, hook } from './state.js';
+import { askText } from './dialog.js';
 import { B, BLOCKS } from './blocks.js';
 import { R } from './render.js';
 import { CS, H } from './world.js';
@@ -149,8 +150,8 @@ export function openMapScreen(openScreen, el) {
     zin.onclick = () => { scale = Math.min(8, scale * 1.5); draw(); };
     zout.onclick = () => { scale = Math.max(0.25, scale / 1.5); draw(); };
     ctr.onclick = () => { cx = pl.pos.x; cz = pl.pos.z; draw(); };
-    addm.onclick = () => {
-      const name = prompt('Nome do marcador:', 'Marcador ' + (MAP.markers.length + 1));
+    addm.onclick = async () => {
+      const name = await askText('Nome do marcador', 'Marcador ' + (MAP.markers.length + 1), { max: 24 });
       if (name === null) return;
       MAP.markers.push({ name: name || 'Marcador', x: Math.floor(pl.pos.x), y: Math.floor(pl.pos.y), z: Math.floor(pl.pos.z), color: '#f55' });
       renderList(); draw(); hook('worldDirty');

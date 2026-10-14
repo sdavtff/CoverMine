@@ -53,6 +53,7 @@ export function partGeometry(part, TW, TH) {
 
 export function makeTexture(canvas) {
   const t = new THREE.CanvasTexture(canvas);
+  if (canvas.pending) canvas.addEventListener('skinready', () => { t.needsUpdate = true; });
   t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
@@ -163,17 +164,35 @@ export const HUMANOID = {
   ],
 };
 
+// skins prontas. Campos extras (opcionais): outfit (roupa), accent (cor de detalhe), hat (chapéu),
+// hatColor, beard (barba), glasses (óculos). Skins importadas usam "png" (data URL 64×64).
+const P = (name, skin, hair, eyes, shirt, pants, shoes, hairStyle, extra) => Object.assign({ name, skin, hair, eyes, shirt, pants, shoes, hairStyle }, extra || {});
 export const SKIN_PRESETS = [
-  { name: 'Explorador', skin: [200, 150, 112], hair: [70, 44, 24], shirt: [40, 130, 160], pants: [50, 60, 140], shoes: [60, 60, 60], eyes: [60, 90, 200], hairStyle: 0 },
-  { name: 'Aventureira', skin: [236, 192, 160], hair: [170, 70, 30], shirt: [170, 40, 60], pants: [60, 50, 40], shoes: [90, 60, 30], eyes: [40, 140, 70], hairStyle: 1 },
-  { name: 'Minerador', skin: [150, 100, 70], hair: [20, 20, 20], shirt: [200, 160, 40], pants: [70, 70, 90], shoes: [40, 40, 40], eyes: [70, 50, 30], hairStyle: 2 },
-  { name: 'Fazendeira', skin: [250, 214, 186], hair: [230, 200, 110], shirt: [90, 150, 60], pants: [110, 80, 50], shoes: [80, 50, 30], eyes: [50, 110, 200], hairStyle: 1 },
-  { name: 'Ninja', skin: [210, 170, 130], hair: [25, 25, 30], shirt: [30, 30, 36], pants: [30, 30, 36], shoes: [20, 20, 20], eyes: [180, 30, 30], hairStyle: 3 },
-  { name: 'Cientista', skin: [190, 140, 100], hair: [140, 140, 140], shirt: [235, 235, 235], pants: [60, 80, 110], shoes: [50, 50, 50], eyes: [90, 60, 40], hairStyle: 0 },
+  P('Explorador', [200, 150, 112], [70, 44, 24], [60, 90, 200], [40, 130, 160], [50, 60, 140], [60, 60, 60], 0),
+  P('Aventureira', [236, 192, 160], [170, 70, 30], [40, 140, 70], [170, 40, 60], [60, 50, 40], [90, 60, 30], 1),
+  P('Minerador', [150, 100, 70], [20, 20, 20], [70, 50, 30], [200, 160, 40], [70, 70, 90], [40, 40, 40], 2, { hat: 2, hatColor: [230, 190, 40], outfit: 'overalls', accent: [70, 70, 90] }),
+  P('Fazendeira', [250, 214, 186], [230, 200, 110], [50, 110, 200], [200, 70, 60], [60, 90, 160], [80, 50, 30], 1, { outfit: 'overalls', accent: [60, 90, 160], hat: 1, hatColor: [220, 190, 120] }),
+  P('Ninja', [210, 170, 130], [25, 25, 30], [180, 30, 30], [30, 30, 36], [30, 30, 36], [20, 20, 20], 3, { outfit: 'longsleeve', hat: 5, hatColor: [170, 30, 30] }),
+  P('Cientista', [190, 140, 100], [140, 140, 140], [90, 60, 40], [235, 235, 235], [60, 80, 110], [50, 50, 50], 0, { outfit: 'coat', accent: [60, 120, 200], glasses: true }),
+  P('Cavaleiro', [220, 180, 150], [90, 60, 30], [60, 90, 150], [170, 175, 185], [150, 155, 165], [90, 95, 105], 0, { outfit: 'armor', accent: [200, 40, 40], hat: 2, hatColor: [170, 175, 185] }),
+  P('Astronauta', [230, 190, 160], [60, 40, 20], [40, 80, 160], [240, 240, 245], [240, 240, 245], [120, 120, 130], 0, { outfit: 'suit', accent: [230, 110, 30], hat: 6, hatColor: [240, 240, 245] }),
+  P('Pirata', [200, 150, 110], [30, 20, 15], [50, 40, 30], [235, 230, 215], [70, 50, 40], [40, 30, 20], 2, { outfit: 'stripes', accent: [160, 30, 40], hat: 5, hatColor: [160, 30, 40], beard: true }),
+  P('Rei', [225, 185, 150], [120, 80, 40], [60, 90, 160], [150, 30, 50], [120, 20, 40], [60, 40, 20], 0, { outfit: 'robe', accent: [235, 200, 60], hat: 3, hatColor: [235, 200, 60], beard: true }),
+  P('Rainha', [245, 205, 180], [60, 30, 20], [80, 50, 130], [110, 40, 140], [110, 40, 140], [60, 40, 20], 1, { outfit: 'dress', accent: [235, 200, 60], hat: 3, hatColor: [235, 200, 60] }),
+  P('Mago', [215, 175, 140], [210, 210, 215], [60, 90, 180], [50, 50, 140], [50, 50, 140], [40, 30, 30], 0, { outfit: 'robe', accent: [235, 200, 60], hat: 4, hatColor: [50, 50, 140], beard: true }),
+  P('Bombeira', [180, 120, 90], [40, 25, 15], [50, 40, 30], [190, 40, 30], [50, 50, 55], [30, 30, 30], 1, { outfit: 'coat', accent: [235, 210, 60], hat: 2, hatColor: [200, 40, 30] }),
+  P('Médico', [160, 110, 80], [25, 20, 15], [50, 40, 30], [120, 190, 200], [120, 190, 200], [240, 240, 240], 2, { outfit: 'coat', accent: [250, 250, 250], glasses: true }),
+  P('Atleta', [120, 80, 55], [20, 15, 10], [50, 40, 30], [240, 210, 40], [40, 90, 180], [250, 250, 250], 2, { outfit: 'jersey', accent: [40, 140, 70] }),
+  P('Mergulhadora', [235, 195, 165], [230, 210, 120], [40, 120, 160], [30, 30, 40], [30, 30, 40], [240, 200, 40], 1, { outfit: 'suit', accent: [240, 200, 40], glasses: true }),
+  P('Robô', [150, 155, 165], [110, 115, 125], [60, 220, 255], [120, 125, 135], [100, 105, 115], [70, 75, 85], 2, { outfit: 'armor', accent: [60, 220, 255], hat: 6, hatColor: [130, 135, 145] }),
+  P('Policial', [190, 140, 105], [30, 25, 20], [50, 70, 120], [40, 60, 120], [30, 40, 80], [20, 20, 20], 2, { outfit: 'suit', accent: [235, 200, 60], hat: 1, hatColor: [30, 40, 80] }),
+  P('Esquiadora', [245, 210, 190], [150, 80, 40], [60, 120, 70], [60, 160, 220], [40, 50, 70], [200, 60, 60], 1, { outfit: 'coat', accent: [250, 250, 250], hat: 4, hatColor: [200, 60, 60], glasses: true }),
+  P('Zumbi', [90, 140, 80], [40, 50, 30], [20, 20, 20], [50, 120, 140], [60, 50, 120], [60, 60, 60], 2, { outfit: 'torn' }),
 ];
+export const OUTFITS = { plain: 'Camiseta', longsleeve: 'Manga longa', stripes: 'Listrada', jersey: 'Camisa de time', coat: 'Jaleco / casaco', suit: 'Macacão', overalls: 'Jardineira', armor: 'Armadura', robe: 'Túnica', dress: 'Vestido', torn: 'Rasgada' };
+export const HATS = ['Nenhum', 'Boné', 'Capacete', 'Coroa', 'Capuz', 'Faixa', 'Capacete com viseira'];
 
-export function drawHumanoidSkin(o) {
-  const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
+function drawBaseSkin(o, cv) {
   const ctx = cv.getContext('2d');
   const sh = (c, k) => c.map((v) => Math.max(0, Math.min(255, v * k)));
   // cabeça
@@ -201,5 +220,118 @@ export function drawHumanoidSkin(o) {
     const n = paintBox(ctx, u, v, 4, 12, 4, o.pants, 12, 9, { bottom: o.shoes });
     for (const k of ['front', 'back', 'left', 'right']) { const [x, y, w, h] = n[k]; noiseFill(ctx, x, y + h - 3, w, 3, o.shoes, 10, 10); }
   }
+  return cv;
+}
+
+// ---------- roupas e acessórios por cima da skin base ----------
+const HEAD = net(0, 0, 8, 8, 8), BODY = net(16, 16, 8, 12, 4);
+const ARMS = [net(40, 16, 4, 12, 4), net(32, 48, 4, 12, 4)], LEGS = [net(0, 16, 4, 12, 4), net(16, 48, 4, 12, 4)];
+const SIDES = ['front', 'back', 'left', 'right'];
+function fill(ctx, r, col, amp = 10, seed = 11, dy = 0, hh) { noiseFill(ctx, r[0], r[1] + dy, r[2], hh == null ? r[3] - dy : hh, col, amp, seed); }
+function px(ctx, col, x, y, w = 1, h = 1) { ctx.fillStyle = `rgb(${col.map((v) => Math.round(v)).join(',')})`; ctx.fillRect(x, y, w, h); }
+const dark = (c, k = 0.7) => c.map((v) => Math.max(0, Math.min(255, v * k)));
+
+function drawOutfit(ctx, o) {
+  const sh = o.shirt, ac = o.accent || dark(sh), pa = o.pants;
+  const sleeves = (len) => { for (const a of ARMS) for (const k of SIDES) fill(ctx, a[k], sh, 12, 8, 0, len); for (const a of ARMS) fill(ctx, a.top, sh); };
+  switch (o.outfit) {
+    case 'longsleeve': sleeves(10); break;
+    case 'stripes': for (const k of SIDES) for (let y = 1; y < 12; y += 3) fill(ctx, BODY[k], ac, 8, 12, y, 1); for (const a of ARMS) for (const k of SIDES) fill(ctx, a[k], ac, 8, 12, 1, 1); break;
+    case 'jersey': { sleeves(4); const f = BODY.front, b = BODY.back; px(ctx, ac, f[0], f[1], 8, 1); for (const a of ARMS) for (const k of SIDES) fill(ctx, a[k], ac, 6, 13, 3, 1);
+      // número nas costas
+      px(ctx, ac, b[0] + 3, b[1] + 3, 2, 1); px(ctx, ac, b[0] + 4, b[1] + 4, 1, 4); px(ctx, ac, b[0] + 3, b[1] + 8, 3, 1); break; }
+    case 'coat': { sleeves(10); for (const k of SIDES) fill(ctx, BODY[k], sh, 10, 14); const f = BODY.front; fill(ctx, [f[0] + 3, f[1], 2, 12], ac, 6, 15); px(ctx, dark(sh, 0.6), f[0] + 3, f[1], 1, 12);
+      for (const l of LEGS) for (const k of SIDES) fill(ctx, l[k], sh, 10, 16, 0, 3); break; }
+    case 'suit': { sleeves(11); for (const k of SIDES) fill(ctx, BODY[k], sh, 8, 17); for (const l of LEGS) for (const k of SIDES) fill(ctx, l[k], sh, 8, 18, 0, 9);
+      const f = BODY.front; px(ctx, ac, f[0], f[1] + 6, 8, 1); px(ctx, ac, f[0] + 1, f[1] + 2, 2, 2); px(ctx, dark(sh, 0.6), f[0] + 4, f[1], 1, 12); break; }
+    case 'overalls': { for (const k of SIDES) fill(ctx, BODY[k], ac, 10, 19, 5); const f = BODY.front, b = BODY.back;
+      px(ctx, ac, f[0] + 1, f[1], 1, 5); px(ctx, ac, f[0] + 6, f[1], 1, 5); px(ctx, ac, b[0] + 1, b[1], 1, 5); px(ctx, ac, b[0] + 6, b[1], 1, 5); px(ctx, [230, 200, 80], f[0] + 1, f[1] + 4); px(ctx, [230, 200, 80], f[0] + 6, f[1] + 4);
+      for (const l of LEGS) for (const k of SIDES) fill(ctx, l[k], ac, 10, 20, 0, 9); break; }
+    case 'armor': { sleeves(11); for (const k of SIDES) fill(ctx, BODY[k], sh, 22, 21); for (const l of LEGS) for (const k of SIDES) fill(ctx, l[k], pa, 22, 22, 0, 10);
+      const f = BODY.front; px(ctx, dark(sh, 0.6), f[0], f[1] + 5, 8, 1); px(ctx, dark(sh, 0.6), f[0] + 4, f[1], 1, 5); px(ctx, ac, f[0] + 3, f[1] + 7, 2, 2);
+      for (const a of ARMS) px(ctx, dark(sh, 0.6), a.front[0], a.front[1] + 4, 4, 1); break; }
+    case 'robe': case 'dress': { sleeves(o.outfit === 'robe' ? 11 : 4); for (const k of SIDES) fill(ctx, BODY[k], sh, 10, 23);
+      for (const l of LEGS) for (const k of SIDES) fill(ctx, l[k], sh, 10, 24, 0, o.outfit === 'robe' ? 11 : 7);
+      const f = BODY.front; px(ctx, ac, f[0], f[1] + 7, 8, 1); if (o.outfit === 'robe') px(ctx, ac, f[0] + 3, f[1], 2, 12);
+      for (const l of LEGS) px(ctx, ac, l.front[0], l.front[1] + (o.outfit === 'robe' ? 10 : 6), 4, 1); break; }
+    case 'torn': { const f = BODY.front; px(ctx, o.skin, f[0] + 1, f[1] + 8, 2, 4); px(ctx, o.skin, f[0] + 5, f[1] + 9, 2, 3); for (const l of LEGS) px(ctx, o.skin, l.front[0] + 1, l.front[1] + 6, 2, 3); break; }
+  }
+}
+function drawHat(ctx, o) {
+  const c = o.hatColor || [60, 60, 60], H = HEAD;
+  const band = (rows, col = c) => { for (const k of SIDES) fill(ctx, H[k], col, 10, 30, 0, rows); };
+  switch (o.hat | 0) {
+    case 1: fill(ctx, H.top, c, 10, 31); band(2); px(ctx, dark(c, 0.75), H.front[0], H.front[1] + 2, 8, 1); break; // boné
+    case 2: fill(ctx, H.top, c, 14, 32); band(2); for (const k of ['back', 'left', 'right']) fill(ctx, H[k], c, 14, 33, 0, 5); px(ctx, dark(c, 0.7), H.front[0], H.front[1] + 2, 8, 1); break; // capacete
+    case 3: { band(2); const f = H.front; for (const k of SIDES) { const r = H[k]; for (let x = 0; x < 8; x += 3) px(ctx, c, r[0] + x, r[1] - 0, 1, 1); } px(ctx, [200, 30, 40], f[0] + 3, f[1] + 1, 2, 1); px(ctx, [40, 90, 210], f[0] + 1, f[1] + 1); px(ctx, [40, 90, 210], f[0] + 6, f[1] + 1); break; } // coroa
+    case 4: { fill(ctx, H.top, c, 10, 34); for (const k of ['back', 'left', 'right']) fill(ctx, H[k], c, 10, 35); const f = H.front; px(ctx, c, f[0], f[1], 8, 2); px(ctx, c, f[0], f[1], 1, 8); px(ctx, c, f[0] + 7, f[1], 1, 8); break; } // capuz
+    case 5: band(1, c); for (const k of SIDES) fill(ctx, H[k], c, 8, 36, 2, 1); break; // faixa
+    case 6: { fill(ctx, H.top, c, 10, 37); for (const k of SIDES) fill(ctx, H[k], c, 10, 38); const f = H.front; fill(ctx, [f[0] + 1, f[1] + 2, 6, 4], [30, 60, 110], 14, 39); px(ctx, [170, 210, 255], f[0] + 2, f[1] + 3, 2, 1); break; } // viseira
+  }
+}
+function drawFaceExtras(ctx, o) {
+  const f = HEAD.front;
+  if (o.beard) { px(ctx, o.hair, f[0] + 1, f[1] + 5, 6, 3); px(ctx, o.hair, f[0], f[1] + 4, 1, 4); px(ctx, o.hair, f[0] + 7, f[1] + 4, 1, 4); px(ctx, dark(o.skin, 0.55), f[0] + 3, f[1] + 6, 2, 1); }
+  if (o.glasses) { px(ctx, [25, 25, 30], f[0], f[1] + 3, 8, 1); px(ctx, [25, 25, 30], f[0] + 1, f[1] + 4, 2, 1); px(ctx, [25, 25, 30], f[0] + 5, f[1] + 4, 2, 1); }
+}
+
+// skins importadas (PNG no formato padrão 64×64 ou antigo 64×32; camadas externas são achatadas)
+const pngCache = new Map();
+function loadPng(url) {
+  let e = pngCache.get(url);
+  if (!e) {
+    e = { img: new Image(), ok: false, waiters: [] };
+    e.img.onload = () => { e.ok = true; for (const w of e.waiters) w(); e.waiters = []; };
+    e.img.src = url;
+    pngCache.set(url, e);
+  }
+  return e;
+}
+function drawPng(cv, img) {
+  const ctx = cv.getContext('2d');
+  const tmp = document.createElement('canvas'); tmp.width = 64; tmp.height = 64;
+  const t = tmp.getContext('2d'); t.imageSmoothingEnabled = false;
+  const legacy = img.height * 2 === img.width;
+  t.drawImage(img, 0, 0, 64, legacy ? 32 : 64);
+  ctx.clearRect(0, 0, 64, 64);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(tmp, 0, 0);
+  if (legacy) { ctx.drawImage(tmp, 40, 16, 16, 16, 32, 48, 16, 16); ctx.drawImage(tmp, 0, 16, 16, 16, 16, 48, 16, 16); }
+  else {
+    // camada externa (chapéu/jaqueta) desenhada por cima da camada base
+    for (const [sx, sy, dx, dy, w, h] of [[32, 0, 0, 0, 32, 16], [16, 32, 16, 16, 24, 16], [40, 32, 40, 16, 16, 16], [48, 48, 32, 48, 16, 16], [0, 32, 0, 16, 16, 16], [0, 48, 16, 48, 16, 16]]) ctx.drawImage(tmp, sx, sy, w, h, dx, dy, w, h);
+  }
+  // pele sem transparência na camada base (evita buracos no modelo)
+  const d = ctx.getImageData(0, 0, 64, 64);
+  for (let i = 3; i < d.data.length; i += 4) if (d.data[i] < 255) { if (d.data[i] === 0) { d.data[i - 3] = 40; d.data[i - 2] = 40; d.data[i - 1] = 40; } d.data[i] = 255; }
+  ctx.putImageData(d, 0, 0);
+}
+// valida um arquivo de imagem como skin; devolve data URL 64×64 ou lança erro
+export async function importSkinFile(file) {
+  if (file.size > 512 * 1024) throw new Error('arquivo grande demais');
+  const url = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(new Error('falha ao ler')); r.readAsDataURL(file); });
+  const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('imagem inválida')); i.src = url; });
+  if (!(img.width === img.height || img.width === img.height * 2) || img.width < 64 || img.width % 64) throw new Error('a skin deve ter 64×64 (ou 64×32) pixels');
+  const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
+  drawPng(cv, img);
+  return cv.toDataURL('image/png');
+}
+
+// desenha a skin completa num canvas 64×64. Para PNG ainda não decodificado, o canvas é
+// preenchido depois e dispara o evento "skinready" (as texturas se atualizam sozinhas).
+export function drawHumanoidSkin(o) {
+  const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
+  o = o || SKIN_PRESETS[0];
+  if (o.png && typeof o.png === 'string' && o.png.startsWith('data:image/')) {
+    const e = loadPng(o.png);
+    if (e.ok) drawPng(cv, e.img);
+    else { drawBaseSkin(SKIN_PRESETS[0], cv); cv.pending = true; e.waiters.push(() => { drawPng(cv, e.img); cv.pending = false; cv.dispatchEvent(new Event('skinready')); }); }
+    return cv;
+  }
+  drawBaseSkin(o, cv);
+  const ctx = cv.getContext('2d');
+  drawOutfit(ctx, o);
+  drawFaceExtras(ctx, o);
+  drawHat(ctx, o);
   return cv;
 }

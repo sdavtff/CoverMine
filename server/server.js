@@ -47,7 +47,7 @@ function startServer(opts = {}) {
   function saveRoom(room) {
     if (!room.dirty) return;
     const f = roomFile(room.name);
-    const data = JSON.stringify({ name: room.name, pass: room.pass, canBuild: room.canBuild, world: room.world, players: room.saved });
+    const data = JSON.stringify({ name: room.name, pass: room.pass, canBuild: room.canBuild, owner: room.owner || null, ownerKey: room.ownerKey || null, created: room.created || Date.now(), world: room.world, players: room.saved });
     try {
       if (fs.existsSync(f)) fs.copyFileSync(f, f + '.bak');
       fs.writeFileSync(f + '.tmp', data);
@@ -55,22 +55,47 @@ function startServer(opts = {}) {
       room.dirty = false;
     } catch (e) { log('erro ao salvar sala', room.name, e.message); }
   }
-  function getRoom(name, pass, upload) {
+  // sala aberta na memória ou salva em disco (null se não existe)
+  function findRoom(name) {
     let room = rooms.get(name);
     if (room) return room;
     const disk = loadRoom(name);
-    room = {
-      name, pass: pass || '', canBuild: true, clients: new Map(), host: null, dirty: true,
-      world: { seed: Math.floor(Math.random() * 2147483647), gen: 3, mode: 'survival', edits: {}, time: 0.3, weather: 'clear' },
-      saved: {},
-    };
-    if (disk) { Object.assign(room, { pass: disk.pass || '', canBuild: disk.canBuild !== false, world: disk.world, saved: disk.players || {} }); room.dirty = false; }
-    if (upload && !disk) setWorld(room, upload);
+    if (!disk) return null;
+    room = newRoom(name);
+    Object.assign(room, { pass: disk.pass || '', canBuild: disk.canBuild !== false, owner: disk.owner || null, ownerKey: disk.ownerKey || null, created: disk.created || 0, world: disk.world, saved: disk.players || {} });
+    room.dirty = false;
     rooms.set(name, room);
     return room;
   }
+  function newRoom(name) {
+    return {
+      name, pass: '', canBuild: true, clients: new Map(), host: null, dirty: true, owner: null, ownerKey: null, created: Date.now(),
+      world: { name: 'Mundo de ' + name, seed: Math.floor(Math.random() * 2147483647), gen: 3, mode: 'survival', edits: {}, time: 0.3, weather: 'clear' },
+      saved: {},
+    };
+  }
+  // lista de salas (abertas + salvas em disco) para o menu de multiplayer
+  function listRooms() {
+    const out = new Map();
+    for (const r of rooms.values()) out.set(r.name, r);
+    let files = [];
+    try { files = fs.readdirSync(dataDir).filter((f) => /^sala-.*\.json$/.test(f)); } catch (e) { /* sem pasta */ }
+    for (const f of files) {
+      if (out.size >= 100) break;
+      try {
+        const d = JSON.parse(fs.readFileSync(path.join(dataDir, f), 'utf8'));
+        if (d && d.name && !out.has(d.name)) out.set(d.name, { name: d.name, pass: d.pass, owner: d.owner, world: d.world, clients: new Map(), created: d.created || 0 });
+      } catch (e) { /* arquivo inválido */ }
+    }
+    return [...out.values()].map((r) => ({
+      name: r.name, world: (r.world && r.world.name) || r.name, mode: r.world && r.world.mode, gen: r.world && r.world.gen,
+      players: r.clients.size, names: [...r.clients.values()].map((c) => c.name).slice(0, 8), locked: !!r.pass, owner: r.owner || null,
+      edits: Object.values((r.world && r.world.edits) || {}).reduce((a, l) => a + l.length, 0), created: r.created || 0,
+    })).sort((a, b) => b.players - a.players || b.created - a.created);
+  }
   function setWorld(room, up) {
     room.world = {
+      name: clean(up.name, 40) || room.world.name || 'Mundo de ' + room.name,
       seed: Number.isFinite(up.seed) ? up.seed | 0 : room.world.seed,
       gen: [1, 2, 3].includes(up.gen) ? up.gen : 3,
       mode: ['survival', 'creative', 'peaceful', 'challenge'].includes(up.mode) ? up.mode : 'survival',
@@ -109,27 +134,36 @@ function startServer(opts = {}) {
   function onHello(c, m) {
     const name = clean(m.room, 32) || 'principal';
     let pname = clean(m.name, 16) || 'Jogador';
-    const upload = m.upload && typeof m.upload === 'object' ? m.upload : null;
-    const room = getRoom(name, m.pass, upload);
-    if (room.pass && room.pass !== String(m.pass || '')) { send(c, { t: 'error', msg: 'Senha incorreta.' }); c.ws.close(); return; }
+    // "upload": mundo salvo do criador; "create": mundo novo (nome, semente, modo)
+    const upload = m.upload && typeof m.upload === 'object' ? m.upload : m.create && typeof m.create === 'object' ? Object.assign({ edits: {} }, m.create) : null;
+    const key = clean(m.key, 64);
+    let room = findRoom(name);
+    const isOwner = !!(room && key && room.ownerKey && room.ownerKey === key);
+    if (upload) {
+      if (room && !isOwner) { send(c, { t: 'error', msg: `Já existe uma sala chamada "${name}". Escolha outro nome.` }); c.ws.close(); return; }
+      if (room && room.clients.size) { send(c, { t: 'error', msg: 'Feche a sala (todos saem) antes de trocar o mundo dela.' }); c.ws.close(); return; }
+      if (!room) {
+        if (rooms.size >= 50) { send(c, { t: 'error', msg: 'O servidor já tem salas demais abertas.' }); c.ws.close(); return; }
+        room = newRoom(name); rooms.set(name, room);
+      }
+      setWorld(room, upload);
+      room.owner = pname; room.ownerKey = key || null; room.pass = String(m.pass || '').slice(0, 40); room.created = Date.now();
+      c.owner = true;
+    } else if (!room) {
+      send(c, { t: 'error', msg: `A sala "${name}" não existe mais. Atualize a lista.` }); c.ws.close(); return;
+    } else if (isOwner) c.owner = true;
+    if (room.pass && room.pass !== String(m.pass || '') && !c.owner) { send(c, { t: 'error', msg: 'Senha incorreta.' }); c.ws.close(); return; }
     if (room.clients.size >= 16) { send(c, { t: 'error', msg: 'Sala cheia (máximo 16 jogadores).' }); c.ws.close(); return; }
     // nomes únicos na sala
     const taken = new Set([...room.clients.values()].map((o) => o.name));
     let n = 2; const base = pname; while (taken.has(pname)) pname = base.slice(0, 13) + ' ' + n++;
     c.name = pname; c.skin = m.skin && typeof m.skin === 'object' ? m.skin : null; c.room = room;
-    // quem envia o mundo (PC "Hospedar sala") vira dono da sala e anfitrião
-    if (upload) {
-      if (room.owner && room.clients.size) { send(c, { t: 'error', msg: 'Esta sala já está aberta por outro anfitrião.' }); c.ws.close(); return; }
-      setWorld(room, upload);
-      room.owner = pname; room.pass = String(m.pass || '');
-      c.owner = true;
-    } else if (room.owner === pname) c.owner = true;
     const you = room.saved[pname] || null;
     if (you) c.pos = { x: you.x, y: you.y, z: you.z };
     const others = [...room.clients.values()].map(pub);
     room.clients.set(c.id, c);
     const isHost = !room.host;
-    send(c, { t: 'welcome', id: c.id, room: name, host: isHost, canBuild: room.canBuild || c.owner, world: room.world, players: others, you: upload ? null : you });
+    send(c, { t: 'welcome', id: c.id, room: name, host: isHost, owner: !!c.owner, canBuild: room.canBuild || !!c.owner, world: room.world, players: others, you: upload ? null : you });
     if (isHost) { room.host = c; c.isHost = true; }
     broadcast(room, { t: 'join', p: pub(c) }, c);
     log(`[${name}] ${pname} entrou (${room.clients.size} jogador(es))${isHost ? ' — anfitrião' : ''}`);
@@ -176,12 +210,22 @@ function startServer(opts = {}) {
       send(t, { t: 'error', msg: 'Você foi removido da sala.' }); t.kicked = true; t.ws.close();
       return reply(t.name + ' foi removido.');
     }
+    if (cmd === 'apagar') {
+      for (const o of room.clients.values()) { send(o, { t: 'error', msg: 'A sala foi apagada pelo dono.' }); o.kicked = true; o.ws.close(); }
+      room.deleted = true;
+      for (const f of [roomFile(room.name), roomFile(room.name) + '.bak']) try { fs.unlinkSync(f); } catch (e) { /* já não existe */ }
+      return;
+    }
     if (cmd === 'senha') { room.pass = args.join(' '); room.dirty = true; return reply(room.pass ? 'Senha alterada.' : 'Sala aberta (sem senha).'); }
-    reply('Comandos: /jogadores, /construir on|off, /expulsar <nome>, /senha <nova>');
+    reply('Comandos: /jogadores, /construir on|off, /expulsar <nome>, /senha <nova>, /apagar (apaga a sala)');
   }
 
   function onMessage(c, m) {
-    if (!c.room) { if (m.t === 'hello') onHello(c, m); return; }
+    if (!c.room) {
+      if (m.t === 'hello') onHello(c, m);
+      else if (m.t === 'rooms') send(c, { t: 'rooms', list: listRooms(), server: 'VoxelCraft', version: 3 });
+      return;
+    }
     const room = c.room;
     switch (m.t) {
       case 'pos':
@@ -230,10 +274,15 @@ function startServer(opts = {}) {
     broadcast(room, { t: 'leave', id: c.id });
     log(`[${room.name}] ${c.name} saiu`);
     if (room.host === c) { room.host = null; const next = room.clients.values().next().value; if (next) setHost(room, next); }
-    if (!room.clients.size) { saveRoom(room); rooms.delete(room.name); }
+    if (!room.clients.size) { if (!room.deleted) saveRoom(room); rooms.delete(room.name); }
   }
 
   const server = http.createServer((req, res) => {
+    if (req.url === '/rooms') {
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify(listRooms()));
+      return;
+    }
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
     res.end(`Servidor VoxelCraft ativo. Salas abertas: ${rooms.size}\n`);
   });

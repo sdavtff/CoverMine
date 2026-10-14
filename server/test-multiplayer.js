@@ -24,7 +24,7 @@ function client(hello) {
     c.waiters = [];
     ws.on('message', (d) => { const m = JSON.parse(d); c.msgs.push(m); c.waiters = c.waiters.filter((w) => !w(m)); });
     ws.on('close', () => { c.closed = true; });
-    ws.on('open', () => { c.send(Object.assign({ t: 'hello', version: 3 }, hello)); resolve(c); });
+    ws.on('open', () => { if (hello) c.send(Object.assign({ t: 'hello', version: 3 }, hello)); resolve(c); });
   });
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -109,6 +109,48 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   ok(w3 && w3.world.seed === 1234 && edits.some((e) => e[0] === 4 + 4 * 16 + 71 * 256 && e[1] === 1), 'mundo e edições persistem após reiniciar o servidor');
   ok(w3 && w3.you && w3.you.inv[0].k === 'stone' && w3.you.health === 15, 'inventário/vida do jogador voltam ao reconectar');
   back.ws.close();
+
+  // ---- várias salas com mundos diferentes ----
+  const q = await client(null);
+  q.send({ t: 'rooms' });
+  const l1 = await q.wait((m) => m.t === 'rooms');
+  ok(l1 && l1.list.some((r) => r.name === 'teste' && r.locked && r.players === 0), 'lista de salas inclui as salvas em disco (com cadeado)');
+  q.ws.close();
+  const c1 = await client({ room: 'floresta', name: 'Davi', key: 'k1', create: { name: 'Floresta', seed: 111, mode: 'survival', gen: 3 } });
+  const wc1 = await c1.wait((m) => m.t === 'welcome');
+  const c2 = await client({ room: 'ilha', name: 'Bia', key: 'k2', create: { name: 'Ilha', seed: 222, mode: 'creative', gen: 3 } });
+  const wc2 = await c2.wait((m) => m.t === 'welcome');
+  ok(wc1 && wc2 && wc1.world.seed === 111 && wc2.world.seed === 222 && wc2.world.mode === 'creative' && wc1.owner && wc1.host, 'duas salas criadas com mundos diferentes');
+  const dup = await client({ room: 'ilha', name: 'Caio', key: 'k3', create: { name: 'Outra', seed: 5 } });
+  const ed = await dup.wait((m) => m.t === 'error');
+  ok(ed && /Já existe/.test(ed.msg), 'nome de sala repetido é recusado');
+  const nope = await client({ room: 'naoexiste', name: 'Caio' });
+  ok(!!(await nope.wait((m) => m.t === 'error' && /não existe/.test(m.msg))), 'entrar em sala inexistente avisa');
+  c1.send({ t: 'block', x: 0, y: 70, z: 0, id: 5, m: 0 });
+  await c1.wait((m) => m.t === 'block');
+  const j2 = await client({ room: 'ilha', name: 'Caio' });
+  const wj2 = await j2.wait((m) => m.t === 'welcome');
+  ok(wj2 && !Object.keys(wj2.world.edits).length && wj2.world.seed === 222, 'edições de uma sala não aparecem na outra');
+  const q2 = await client(null); q2.send({ t: 'rooms' });
+  const l2 = await q2.wait((m) => m.t === 'rooms');
+  const ilha = l2 && l2.list.find((r) => r.name === 'ilha');
+  ok(ilha && ilha.players === 2 && ilha.world === 'Ilha' && ilha.mode === 'creative', 'lista mostra jogadores, nome do mundo e modo');
+  q2.ws.close();
+  j2.send({ t: 'chat', text: '/apagar' });
+  ok(!!(await j2.wait((m) => m.t === 'chat' && /dono/.test(m.text))), 'só o dono pode apagar a sala');
+  c2.send({ t: 'chat', text: '/apagar' });
+  ok(!!(await j2.wait((m) => m.t === 'error' && /apagada/.test(m.msg))), 'dono apaga a sala e todos são avisados');
+  await sleep(300);
+  const q3 = await client(null); q3.send({ t: 'rooms' });
+  const l3 = await q3.wait((m) => m.t === 'rooms');
+  ok(l3 && !l3.list.some((r) => r.name === 'ilha') && l3.list.some((r) => r.name === 'floresta'), 'sala apagada some da lista');
+  q3.ws.close(); c1.ws.close();
+  await sleep(200);
+  // dono reabre a própria sala com o mundo do aparelho (mesma chave)
+  const re = await client({ room: 'floresta', name: 'Davi', key: 'k1', upload: { name: 'Floresta 2', seed: 333, gen: 3, mode: 'survival', edits: {} } });
+  const wre = await re.wait((m) => m.t === 'welcome');
+  ok(wre && wre.world.seed === 333 && wre.owner, 'dono reabre a sala com outro mundo (chave de dono)');
+  re.ws.close();
 
   srv.close();
   console.log(`\n${pass} passaram, ${fail} falharam`);

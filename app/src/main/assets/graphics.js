@@ -1,32 +1,34 @@
 // Configurações gráficas do VoxelCraft: presets, persistência e painel de interface.
 
 export const PRESETS = {
-  low:    { tex: 32,  rd: 3, shadows: 0, water: 0, veg: 1, aa: false, clouds: 1, res: 0.75, post: 0, particles: 0.5 },
-  medium: { tex: 64,  rd: 5, shadows: 1, water: 1, veg: 2, aa: false, clouds: 1, res: 1, post: 1, particles: 0.8 },
-  high:   { tex: 64,  rd: 6, shadows: 3, water: 2, veg: 3, aa: true,  clouds: 2, res: 1.25, post: 2, particles: 1 },
-  ultra:  { tex: 128, rd: 8, shadows: 4, water: 3, veg: 3, aa: true,  clouds: 2, res: 1.5, post: 3, particles: 1.25 },
+  low:    { tex: 32,  rd: 3, shadows: 0, water: 0, veg: 1, aa: false, clouds: 1, res: 0.75, post: 0, particles: 0.5, ssao: 0, dynLights: 0, torchShadows: false, godrays: false, sky: 1 },
+  medium: { tex: 64,  rd: 5, shadows: 1, water: 1, veg: 2, aa: false, clouds: 1, res: 1, post: 1, particles: 0.8, ssao: 0, dynLights: 0, torchShadows: false, godrays: false, sky: 1 },
+  high:   { tex: 64,  rd: 6, shadows: 3, water: 2, veg: 3, aa: true,  clouds: 2, res: 1.25, post: 2, particles: 1, ssao: 1, dynLights: 2, torchShadows: false, godrays: true, sky: 1 },
+  ultra:  { tex: 128, rd: 8, shadows: 4, water: 3, veg: 3, aa: true,  clouds: 2, res: 1.5, post: 3, particles: 1.25, ssao: 2, dynLights: 4, torchShadows: true, godrays: true, sky: 1 },
 };
 export const PRESET_ORDER = ['low', 'medium', 'high', 'ultra'];
 export const PRESET_NAMES = { low: 'Baixa', medium: 'Média', high: 'Alta', ultra: 'Ultra', custom: 'Personalizada' };
 
-// tamanho do mapa de sombras, alcance (blocos) e intervalo de atualização (quadros)
+// sombras do sol em cascata (CSM): tamanho de cada mapa, fim de cada cascata (blocos a partir da
+// câmera) e de quantos em quantos quadros cada cascata é redesenhada
 export const SHADOW_LEVELS = [
   null,
-  { size: 1024, range: 36, soft: false, every: 2 },
-  { size: 2048, range: 48, soft: true, every: 1 },
-  { size: 2048, range: 64, soft: true, every: 1 },
-  { size: 4096, range: 80, soft: true, every: 1 },
+  { size: 1024, splits: [40], every: [2], soft: false },
+  { size: 1024, splits: [20, 64], every: [1, 3], soft: true },
+  { size: 1024, splits: [12, 36, 96], every: [1, 2, 4], soft: true },
+  { size: 2048, splits: [16, 48, 128], every: [1, 2, 3], soft: true },
 ];
 export const VEG_DENSITY = [0, 0.1, 0.22, 0.38];
 
 export function defaultSettings(isTouch) {
+  // celular começa no preset Média; PC no Alta
   return Object.assign({
-    preset: 'high',
+    preset: isTouch ? 'medium' : 'high',
     light: 1, fog: true, fogDensity: 1, fpsCap: isTouch ? 60 : 0, eco: false, auto: true,
     sens: 1, fov: 75, volume: 0.8, uiScale: 1, invertY: false, minimap: true, showInfo: true, compass: true, viewBob: true,
-    reduceFlash: false, highContrast: false, name: 'Jogador', skin: null, camDefault: 0, autoUpdate: true,
+    reduceFlash: false, highContrast: false, name: 'Jogador', skin: null, camDefault: 0, autoUpdate: true, lastServer: '', lastRoom: '', netKey: '',
     bloom: true, vignette: true, grading: true,
-  }, PRESETS.high);
+  }, isTouch ? PRESETS.medium : PRESETS.high);
 }
 
 export function loadSettings(isTouch) {
@@ -36,7 +38,7 @@ export function loadSettings(isTouch) {
   if (saved.sens != null) s.sens = +saved.sens;
   if (saved.preset) {
     // versão nova: restaura tudo
-    for (const k in s) if (saved[k] !== undefined) s[k] = saved[k];
+    for (const k in saved) if (saved[k] !== undefined && saved[k] !== null) s[k] = saved[k];
   }
   // migração: a versão antiga só tinha distância de visão e sensibilidade
   else if (saved.rd != null) s.rd = Math.max(2, Math.min(12, +saved.rd));
@@ -56,7 +58,13 @@ export function effective(s) {
     e.res = Math.min(s.res, 0.6); e.rd = Math.min(s.rd, 4);
     e.fpsCap = s.fpsCap === 0 ? 30 : Math.min(s.fpsCap, 30);
     e.post = 0; e.particles = Math.min(s.particles, 0.5);
+    e.ssao = 0; e.dynLights = 0; e.torchShadows = false; e.godrays = false;
   }
+  // SSAO e raios de sol são passes de pós-processamento
+  if (!e.post) { e.ssao = 0; e.godrays = false; }
+  if (e.ssao == null) e.ssao = 0;
+  if (e.dynLights == null) e.dynLights = 0;
+  if (e.sky == null) e.sky = 1;
   e.pbr = !s.eco && e.tex >= 64;
   e.normalMaps = e.tex >= 64;
   e.envMap = !s.eco && e.shadows >= 3;
@@ -73,7 +81,12 @@ const SCHEMA = [
   { key: 'preset', label: 'Qualidade gráfica', type: 'select', options: [['low', 'Baixa'], ['medium', 'Média'], ['high', 'Alta'], ['ultra', 'Ultra'], ['custom', 'Personalizada']] },
   { key: 'tex', label: 'Qualidade das texturas', type: 'select', num: true, options: [[32, 'Baixa (32 px)'], [64, 'Média (64 px + relevo)'], [128, 'Alta (128 px + relevo)']] },
   { key: 'rd', label: 'Distância de renderização', type: 'range', min: 2, max: 12, step: 1, fmt: (v) => `${v} chunks (${v * 16} blocos)` },
-  { key: 'shadows', label: 'Qualidade das sombras', type: 'select', num: true, options: [[0, 'Desligadas'], [1, 'Baixa'], [2, 'Média'], [3, 'Alta'], [4, 'Ultra']] },
+  { key: 'shadows', label: 'Sombras do sol', type: 'select', num: true, options: [[0, 'Desligadas'], [1, 'Baixa (1 mapa)'], [2, 'Média (2 cascatas)'], [3, 'Alta (3 cascatas 1024)'], [4, 'Ultra (3 cascatas 2048)']] },
+  { key: 'ssao', label: 'Oclusão de ambiente (SSAO)', type: 'select', num: true, options: [[0, 'Desligada'], [1, 'Baixa'], [2, 'Alta']], note: 'precisa de pós-processamento' },
+  { key: 'dynLights', label: 'Luzes dinâmicas (tochas, lava)', type: 'select', num: true, options: [[0, 'Nenhuma'], [2, '2 mais próximas'], [4, '4 mais próximas']] },
+  { key: 'torchShadows', label: '  Sombras da tocha mais próxima', type: 'check' },
+  { key: 'godrays', label: 'Raios de sol (god rays)', type: 'check', note: 'precisa de pós-processamento' },
+  { key: 'sky', label: 'Céu', type: 'select', num: true, options: [[0, 'Clássico'], [1, 'Físico (dispersão atmosférica)']], keepPreset: true },
   { key: 'light', label: 'Intensidade da iluminação', type: 'range', min: 0.5, max: 1.6, step: 0.05, fmt: (v) => `${Math.round(v * 100)}%`, keepPreset: true },
   { key: 'water', label: 'Qualidade da água', type: 'select', num: true, options: [[0, 'Simples'], [1, 'Média (ondas + reflexo do céu)'], [2, 'Alta (+ brilho do sol, espuma, cáusticas)'], [3, 'Ultra (+ reflexos reais)']] },
   { key: 'veg', label: 'Densidade da vegetação', type: 'select', num: true, options: [[0, 'Nenhuma'], [1, 'Baixa'], [2, 'Média'], [3, 'Alta']] },

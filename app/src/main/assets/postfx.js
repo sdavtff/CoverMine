@@ -4,7 +4,7 @@ import * as THREE from './lib/three.module.min.js';
 import { G } from './state.js';
 import { R } from './render.js';
 
-const P = { sceneRT: null, ldrRT: null, bloomA: null, bloomB: null, size: new THREE.Vector2(), samples: 0 };
+const P = { sceneRT: null, ldrRT: null, bloomA: null, bloomB: null, aoA: null, aoB: null, rayA: null, rayB: null, size: new THREE.Vector2(), samples: 0, depth: false };
 const quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2));
 quad.frustumCulled = false;
@@ -45,11 +45,16 @@ const blurMat = mk(/* glsl */`
   }`, { tSrc: { value: null }, uDir: { value: new THREE.Vector2() } });
 const compMat = mk(ACES + /* glsl */`
   uniform sampler2D tScene; uniform sampler2D tBloom; uniform float uBloom; uniform float uExposure;
+  uniform sampler2D tAO; uniform float uAO; uniform sampler2D tRays; uniform float uRays; uniform sampler2D tDepth; uniform float uHandMask;
   uniform float uVignette; uniform float uGrade; uniform float uFlash; uniform vec3 uTint; uniform float uLDR;
   varying vec2 vUv;
   void main() {
     vec3 c = texture2D(tScene, vUv).rgb;
+    // depois da mão, a profundidade só contém a mão: ali não se aplica o AO da cena
+    float hand = uHandMask > 0.5 && texture2D(tDepth, vUv).x < 0.99999 ? 1.0 : 0.0;
+    if (uAO > 0.0) c *= mix(1.0, texture2D(tAO, vUv).r, uAO * (1.0 - hand));
     if (uBloom > 0.0) c += texture2D(tBloom, vUv).rgb * uBloom;
+    if (uRays > 0.0) c += texture2D(tRays, vUv).rgb * uRays;
     vec3 col;
     if (uLDR > 0.5) col = c; // cena já em LDR (sem alvo de ponto flutuante)
     else { col = aces(c * uExposure); col = toSRGB(col); }
@@ -62,7 +67,99 @@ const compMat = mk(ACES + /* glsl */`
     if (uVignette > 0.0) { vec2 d = vUv - 0.5; col *= 1.0 - dot(d, d) * 0.9 * uVignette; }
     col += uFlash;
     gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
-  }`, { tScene: { value: null }, tBloom: { value: null }, uBloom: { value: 0 }, uExposure: { value: 1 }, uVignette: { value: 0 }, uGrade: { value: 0 }, uFlash: { value: 0 }, uTint: { value: new THREE.Color(1, 1, 1) }, uLDR: { value: 0 } });
+  }`, { tScene: { value: null }, tBloom: { value: null }, uBloom: { value: 0 }, uExposure: { value: 1 }, uVignette: { value: 0 }, uGrade: { value: 0 }, uFlash: { value: 0 }, uTint: { value: new THREE.Color(1, 1, 1) }, uLDR: { value: 0 },
+  tAO: { value: null }, uAO: { value: 0 }, tRays: { value: null }, uRays: { value: 0 }, tDepth: { value: null }, uHandMask: { value: 0 } });
+
+// ---------------- SSAO (meia resolução) ----------------
+// reconstrói a posição no espaço da câmera pela profundidade, normal pelas diferenças dos vizinhos,
+// e testa N amostras num hemisfério girado por pixel (ruído entrelaçado); depois um desfoque que respeita bordas.
+const AO_KERNEL = [];
+for (let i = 0; i < 16; i++) {
+  const a = i * 2.399963, z = 0.15 + 0.85 * ((i * 0.618034) % 1);
+  const r = Math.sqrt(1 - z * z), sc = 0.25 + 0.75 * ((i + 1) / 16) * ((i + 1) / 16);
+  AO_KERNEL.push(new THREE.Vector3(Math.cos(a) * r * sc, Math.sin(a) * r * sc, z * sc));
+}
+const VIEWPOS = /* glsl */`
+uniform sampler2D tDepth; uniform mat4 uInvProj; uniform mat4 uProj;
+vec3 viewPos(vec2 uv) {
+  float d = texture2D(tDepth, uv).x;
+  vec4 p = uInvProj * vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
+  return p.xyz / p.w;
+}`;
+const aoMats = {};
+function aoMaterial(n) {
+  if (aoMats[n]) return aoMats[n];
+  return (aoMats[n] = mk(VIEWPOS + /* glsl */`
+    #define AO_N ${n}
+    uniform vec3 uKernel[16]; uniform vec2 uTexel; uniform float uRadius;
+    varying vec2 vUv;
+    void main() {
+      float d = texture2D(tDepth, vUv).x;
+      if (d >= 0.99999) { gl_FragColor = vec4(1.0); return; }
+      vec3 P = viewPos(vUv);
+      vec3 pr = viewPos(vUv + vec2(uTexel.x, 0.0)) - P, pl = P - viewPos(vUv - vec2(uTexel.x, 0.0));
+      vec3 pu = viewPos(vUv + vec2(0.0, uTexel.y)) - P, pd = P - viewPos(vUv - vec2(0.0, uTexel.y));
+      vec3 dx = abs(pr.z) < abs(pl.z) ? pr : pl, dy = abs(pu.z) < abs(pd.z) ? pu : pd;
+      vec3 N = normalize(cross(dx, dy));
+      float noise = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+      float ang = noise * 6.2831853;
+      vec3 rnd = vec3(cos(ang), sin(ang), 0.0);
+      vec3 T = normalize(rnd - N * dot(rnd, N)); vec3 B = cross(N, T);
+      float radius = uRadius * clamp(-P.z * 0.08, 0.6, 2.0);
+      float occ = 0.0;
+      for (int i = 0; i < AO_N; i++) {
+        vec3 k = uKernel[i];
+        vec3 S = P + (T * k.x + B * k.y + N * k.z) * radius;
+        vec4 c = uProj * vec4(S, 1.0);
+        vec2 suv = c.xy / c.w * 0.5 + 0.5;
+        if (suv.x < 0.0 || suv.x > 1.0 || suv.y < 0.0 || suv.y > 1.0) continue;
+        float sz = viewPos(suv).z;
+        float range = smoothstep(0.0, 1.0, radius / abs(P.z - sz));
+        occ += (sz >= S.z + 0.03 ? 1.0 : 0.0) * range;
+      }
+      float ao = 1.0 - occ / float(AO_N);
+      gl_FragColor = vec4(vec3(ao * ao), 1.0);
+    }`, { tDepth: { value: null }, uInvProj: { value: new THREE.Matrix4() }, uProj: { value: new THREE.Matrix4() }, uKernel: { value: AO_KERNEL }, uTexel: { value: new THREE.Vector2() }, uRadius: { value: 0.7 } }));
+}
+const aoBlur = mk(/* glsl */`
+  uniform sampler2D tSrc; uniform sampler2D tDepth; uniform vec2 uDir; uniform mat4 uInvProj;
+  varying vec2 vUv;
+  float lin(vec2 uv) { float d = texture2D(tDepth, uv).x; vec4 p = uInvProj * vec4(0.0, 0.0, d * 2.0 - 1.0, 1.0); return -p.z / p.w; }
+  void main() {
+    float z0 = lin(vUv), sum = 0.0, wsum = 0.0;
+    for (int i = -3; i <= 3; i++) {
+      vec2 uv = vUv + uDir * float(i);
+      float w = exp(-float(i * i) * 0.12) / (1.0 + abs(lin(uv) - z0) * 6.0 / max(z0 * 0.05, 0.05));
+      sum += texture2D(tSrc, uv).r * w; wsum += w;
+    }
+    gl_FragColor = vec4(vec3(sum / wsum), 1.0);
+  }`, { tSrc: { value: null }, tDepth: { value: null }, uDir: { value: new THREE.Vector2() }, uInvProj: { value: new THREE.Matrix4() } });
+
+// ---------------- raios de sol (god rays) ----------------
+// máscara: só o céu perto do sol; depois um desfoque radial a partir da posição do sol na tela.
+const rayMask = mk(/* glsl */`
+  uniform sampler2D tScene; uniform sampler2D tDepth; uniform vec2 uSun; uniform float uAspect;
+  varying vec2 vUv;
+  void main() {
+    float d = texture2D(tDepth, vUv).x;
+    vec2 dv = (vUv - uSun) * vec2(uAspect, 1.0);
+    float fall = pow(max(0.0, 1.0 - length(dv) * 1.6), 2.0);
+    // só a parte mais brilhante do céu (o sol e o halo): os raios aparecem onde algo o encobre
+    vec3 sc = texture2D(tScene, vUv).rgb;
+    float l = dot(sc, vec3(0.2126, 0.7152, 0.0722));
+    vec3 c = d >= 0.99999 ? min(sc, vec3(4.0)) * smoothstep(0.9, 2.5, l) * fall : vec3(0.0);
+    gl_FragColor = vec4(c, 1.0);
+  }`, { tScene: { value: null }, tDepth: { value: null }, uSun: { value: new THREE.Vector2() }, uAspect: { value: 1 } });
+const rayBlur = mk(/* glsl */`
+  uniform sampler2D tSrc; uniform vec2 uSun; uniform float uDensity;
+  varying vec2 vUv;
+  void main() {
+    vec2 delta = (vUv - uSun) * uDensity / 24.0;
+    vec2 uv = vUv; float decay = 1.0; vec3 acc = vec3(0.0);
+    for (int i = 0; i < 24; i++) { uv -= delta; acc += texture2D(tSrc, uv).rgb * decay; decay *= 0.94; }
+    gl_FragColor = vec4(acc / 16.0, 1.0);
+  }`, { tSrc: { value: null }, uSun: { value: new THREE.Vector2() }, uDensity: { value: 0.9 } });
+const _sunW = new THREE.Vector3();
 const fxaaMat = mk(/* glsl */`
   uniform sampler2D tSrc; uniform vec2 uRes; varying vec2 vUv;
   float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
@@ -89,9 +186,21 @@ function ensureTargets() {
   const w = Math.max(1, P.size.x), h = Math.max(1, P.size.y);
   const wantSamples = G.eff.aa && r.capabilities.isWebGL2 ? 4 : 0;
   const type = R.halfFloatRT ? THREE.HalfFloatType : THREE.UnsignedByteType;
-  if (!P.sceneRT || P.sceneRT.width !== w || P.sceneRT.height !== h || P.samples !== wantSamples || P.type !== type) {
-    for (const k of ['sceneRT', 'ldrRT', 'bloomA', 'bloomB']) if (P[k]) P[k].dispose();
-    P.sceneRT = new THREE.WebGLRenderTarget(w, h, { type, samples: wantSamples });
+  // SSAO e raios de sol precisam da profundidade da cena (só WebGL2)
+  const depth = r.capabilities.isWebGL2 && (G.eff.ssao > 0 || !!G.eff.godrays);
+  if (!P.sceneRT || P.sceneRT.width !== w || P.sceneRT.height !== h || P.samples !== wantSamples || P.type !== type || P.depth !== depth) {
+    for (const k of ['sceneRT', 'ldrRT', 'bloomA', 'bloomB', 'aoA', 'aoB', 'rayA', 'rayB']) if (P[k]) { P[k].dispose(); P[k] = null; }
+    const opts = { type, samples: wantSamples };
+    if (depth) { opts.depthTexture = new THREE.DepthTexture(w, h); opts.depthTexture.type = THREE.UnsignedIntType; }
+    P.sceneRT = new THREE.WebGLRenderTarget(w, h, opts);
+    P.depth = depth;
+    if (depth) {
+      const hw = Math.max(1, w >> 1), hh = Math.max(1, h >> 1), qw = Math.max(1, w >> 2), qh = Math.max(1, h >> 2);
+      P.aoA = new THREE.WebGLRenderTarget(hw, hh, { type: THREE.UnsignedByteType, depthBuffer: false });
+      P.aoB = new THREE.WebGLRenderTarget(hw, hh, { type: THREE.UnsignedByteType, depthBuffer: false });
+      P.rayA = new THREE.WebGLRenderTarget(qw, qh, { type, depthBuffer: false });
+      P.rayB = new THREE.WebGLRenderTarget(qw, qh, { type, depthBuffer: false });
+    }
     P.ldrRT = new THREE.WebGLRenderTarget(w, h, { type: THREE.UnsignedByteType });
     const bw = Math.max(1, w >> 2), bh = Math.max(1, h >> 2);
     P.bloomA = new THREE.WebGLRenderTarget(bw, bh, { type });
@@ -106,7 +215,7 @@ export function postEnabled() { return (G.eff.post || 0) > 0; }
 // desenha o quadro: drawScene(target) desenha a cena (e a mão) no alvo dado
 export function renderFrame(drawScene, extra = {}) {
   const r = G.renderer, eff = G.eff, S = G.settings;
-  if (!postEnabled()) { r.setRenderTarget(null); drawScene(null); return; }
+  if (!postEnabled()) { r.setRenderTarget(null); drawScene(null); if (extra.overlay) { r.setRenderTarget(null); extra.overlay(); } return; }
   ensureTargets();
   const exposure = r.toneMappingExposure;
   const tm = r.toneMapping;
@@ -124,6 +233,42 @@ export function renderFrame(drawScene, extra = {}) {
     }
   }
   const u = compMat.uniforms;
+  const cam = G.camera;
+  // SSAO
+  u.uAO.value = 0;
+  if (P.depth && eff.ssao > 0 && !extra.noAO) {
+    const am = aoMaterial(eff.ssao >= 2 ? 12 : 6);
+    am.uniforms.tDepth.value = P.sceneRT.depthTexture;
+    am.uniforms.uProj.value.copy(cam.projectionMatrix);
+    am.uniforms.uInvProj.value.copy(cam.projectionMatrixInverse);
+    am.uniforms.uTexel.value.set(1 / P.aoA.width, 1 / P.aoA.height);
+    pass(am, P.aoA);
+    aoBlur.uniforms.tDepth.value = P.sceneRT.depthTexture;
+    aoBlur.uniforms.uInvProj.value.copy(cam.projectionMatrixInverse);
+    aoBlur.uniforms.tSrc.value = P.aoA.texture; aoBlur.uniforms.uDir.value.set(1 / P.aoA.width, 0); pass(aoBlur, P.aoB);
+    aoBlur.uniforms.tSrc.value = P.aoB.texture; aoBlur.uniforms.uDir.value.set(0, 1 / P.aoA.height); pass(aoBlur, P.aoA);
+    u.tAO.value = P.aoA.texture;
+    u.uAO.value = eff.ssao >= 2 ? 0.85 : 0.7;
+  }
+  // raios de sol
+  u.uRays.value = 0;
+  if (P.depth && eff.godrays && extra.sunDir && extra.rays > 0.01) {
+    _sunW.copy(extra.sunDir).multiplyScalar(500).add(cam.position).project(cam);
+    const facing = extra.sunDir.dot(cam.getWorldDirection(new THREE.Vector3()));
+    if (facing > 0 && Math.abs(_sunW.x) < 1.6 && Math.abs(_sunW.y) < 1.6) {
+      const sx = _sunW.x * 0.5 + 0.5, sy = _sunW.y * 0.5 + 0.5;
+      rayMask.uniforms.tScene.value = P.sceneRT.texture; rayMask.uniforms.tDepth.value = P.sceneRT.depthTexture;
+      rayMask.uniforms.uSun.value.set(sx, sy); rayMask.uniforms.uAspect.value = cam.aspect;
+      pass(rayMask, P.rayA);
+      rayBlur.uniforms.tSrc.value = P.rayA.texture; rayBlur.uniforms.uSun.value.set(sx, sy); rayBlur.uniforms.uDensity.value = 0.95;
+      pass(rayBlur, P.rayB);
+      u.tRays.value = P.rayB.texture;
+      u.uRays.value = extra.rays * Math.min(1, facing * 2);
+    }
+  }
+  // sobreposição (mão em 1ª pessoa) depois do SSAO e dos raios, que precisam só da profundidade da cena
+  u.uHandMask.value = 0;
+  if (extra.overlay) { r.setRenderTarget(P.sceneRT); const tm2 = r.toneMapping; r.toneMapping = THREE.NoToneMapping; extra.overlay(); r.toneMapping = tm2; if (P.depth) { u.tDepth.value = P.sceneRT.depthTexture; u.uHandMask.value = 1; } }
   u.tScene.value = P.sceneRT.texture;
   u.tBloom.value = P.bloomA.texture;
   u.uBloom.value = bloomOn ? 0.35 : 0;

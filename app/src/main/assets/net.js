@@ -26,7 +26,7 @@ export const NET = {
   sendProfile() { if (this.connected) this.send({ t: 'profile', name: G.settings.name, skin: G.settings.skin }); },
   remoteList() { return [...this.players.values()].map((p) => ({ name: p.name, x: p.x, z: p.z })); },
   statusShort() { return `${this.players.size + 1} jogador(es) · sala ${this.room}`; },
-  statusText() { return `Multiplayer: sala "${this.room}" em ${this.addr} · ${this.players.size + 1} jogador(es)${this.host ? ' · você é o anfitrião' : ''}${this.canBuild ? '' : ' · sem permissão de construir'}`; },
+  statusText() { return `Multiplayer: sala "${this.room}" (${this.worldName || ''}) em ${this.addr} · ${this.players.size + 1} jogador(es)${this.host ? ' · você é o anfitrião' : ''}${this.canBuild ? '' : ' · sem permissão de construir'}`; },
   disconnect() { this.wantClose = true; if (this.ws) this.ws.close(); cleanup(); },
   openChat() { openChat(); },
   render(dt) { renderRemotes(dt); },
@@ -40,8 +40,26 @@ function wsURL(addr) {
   return 'ws://' + a;
 }
 
-// entra numa sala; upload = dados do mundo (anfitrião) ou null
-export function joinServer(addr, room, pass, status, upload) {
+// chave de dono (identifica quem criou a sala sem precisar de conta)
+function ownerKey() {
+  if (!G.settings.netKey) { G.settings.netKey = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, '0')).join(''); hook('settingsChanged', 'netKey'); }
+  return G.settings.netKey;
+}
+
+// consulta a lista de salas de um servidor (sem entrar em nenhuma)
+export function queryRooms(addr) {
+  return new Promise((resolve, reject) => {
+    let ws;
+    try { ws = new WebSocket(wsURL(addr)); } catch (e) { reject(new Error('endereço inválido')); return; }
+    const t = setTimeout(() => { try { ws.close(); } catch (e) { } reject(new Error('o servidor não respondeu (confira o endereço e se ele está ligado)')); }, 6000);
+    ws.onopen = () => ws.send(JSON.stringify({ t: 'rooms' }));
+    ws.onmessage = (ev) => { let m; try { m = JSON.parse(ev.data); } catch (e) { return; } if (m.t === 'rooms') { clearTimeout(t); ws.close(); resolve(m.list || []); } };
+    ws.onerror = () => { clearTimeout(t); reject(new Error('não foi possível conectar')); };
+  });
+}
+
+// entra numa sala; upload = mundo salvo enviado pelo criador; create = mundo novo { name, seed, mode, gen }
+export function joinServer(addr, room, pass, status, upload, create) {
   status = status || (() => {});
   NET.wantClose = false;
   NET.addr = addr; NET.room = room;
@@ -53,7 +71,7 @@ export function joinServer(addr, room, pass, status, upload) {
   ws.onopen = () => {
     clearTimeout(timer);
     status('Conectado. Entrando na sala...');
-    NET.send({ t: 'hello', room, pass, name: G.settings.name || 'Jogador', skin: G.settings.skin, version: 3, upload: upload || null });
+    NET.send({ t: 'hello', room, pass, key: ownerKey(), name: G.settings.name || 'Jogador', skin: G.settings.skin, version: 3, upload: upload || null, create: create || null });
   };
   ws.onmessage = (ev) => { let m; try { m = JSON.parse(ev.data); } catch (e) { return; } onMessage(m, status); };
   ws.onclose = () => {
@@ -78,12 +96,12 @@ async function onMessage(m, status) {
   switch (m.t) {
     case 'error': status(m.msg); hook('toast', m.msg); break;
     case 'welcome': {
-      NET.connected = true; NET.id = m.id; NET.host = !!m.host; NET.canBuild = m.canBuild !== false; NET.retry = 0;
+      NET.connected = true; NET.id = m.id; NET.host = !!m.host; NET.owner = !!m.owner; NET.canBuild = m.canBuild !== false; NET.retry = 0; NET.worldName = m.world.name || ('Sala ' + m.room);
       // convidado: monta o mundo da sala; anfitrião: já está no próprio mundo
       if (!NET.host || !G.world) {
         const edits = {};
         for (const k in m.world.edits || {}) edits[k] = m.world.edits[k];
-        const meta = { id: 'net-' + m.room, name: 'Sala ' + m.room, seed: m.world.seed, gen: m.world.gen, mode: m.world.mode, slot: -1 };
+        const meta = { id: 'net-' + m.room, name: NET.worldName, seed: m.world.seed, gen: m.world.gen, mode: m.world.mode, slot: -1, net: true };
         await hook('startNetWorld', meta, { edits, time: m.world.time, player: m.you || null, weather: m.world.weather ? { state: m.world.weather, timer: 100 } : null });
       }
       for (const p of m.players || []) addRemote(p);
@@ -223,13 +241,25 @@ function chatLine(text) {
   setTimeout(() => d.classList.add('old'), 10000);
 }
 function openChat() {
-  const text = prompt('Mensagem:');
-  if (text && text.trim()) { NET.send({ t: 'chat', text: text.trim().slice(0, 200) }); chatLine(`<${G.settings.name || 'Você'}> ${text.trim()}`); }
+  // caixa de texto na própria tela (prompt() não funciona na WebView do Android)
+  let box = document.getElementById('chat-input');
+  if (!box) {
+    box = document.createElement('input'); box.id = 'chat-input'; box.maxLength = 200; box.placeholder = 'Mensagem (Enter envia, Esc fecha)';
+    box.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') {
+        const text = box.value.trim();
+        if (text) { NET.send({ t: 'chat', text }); if (text[0] !== '/') chatLine(`<${G.settings.name || 'Você'}> ${text}`); }
+        close();
+      } else if (e.key === 'Escape') close();
+    });
+    box.addEventListener('blur', () => setTimeout(close, 150));
+    document.body.appendChild(box);
+  }
+  const close = () => { box.value = ''; box.classList.remove('open'); box.blur(); G.chatOpen = false; };
+  G.chatOpen = true;
+  box.classList.add('open');
+  setTimeout(() => box.focus(), 20);
 }
 
-// PC: hospedar sala com um mundo salvo (servidor embutido no app Electron)
-export async function hostPick() {
-  if (!window.vcDesktop || !window.vcDesktop.host) return;
-  hook('hostPickWorld');
-}
 export { Inventory };

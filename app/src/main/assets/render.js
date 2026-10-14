@@ -6,6 +6,8 @@ import { buildAtlas, tileUV, atlasToCanvas } from './textures.js';
 import { TILE_COUNT } from './tiles.js';
 import { U, makeSkyMaterial, makeCloudMaterial, makeWaterMaterial, patchTerrainMaterial, makeDepthMaterial } from './shaders.js';
 import { SHADOW_LEVELS, VEG_DENSITY, effective } from './graphics.js';
+import { L as LIGHT, initLighting, applyLighting, updateCascades, physicalSky, updateProbe, updateGround, updateDynamicLights, resetGroundCache } from './lighting.js';
+import { BIOME_GRASS } from './worldgen.js';
 import { idbGet, idbSet } from './idb.js';
 import { meshChunk } from './mesher.js';
 import { CS } from './world.js';
@@ -40,12 +42,10 @@ export function initRenderer(canvas) {
   R.clouds = new THREE.Mesh(new THREE.PlaneGeometry(1800, 1800, 1, 1), R.cloudMat);
   R.clouds.rotation.x = -Math.PI / 2; R.clouds.frustumCulled = false; R.clouds.renderOrder = 2;
   scene.add(R.clouds);
-  R.sun = new THREE.DirectionalLight(0xffffff, 3);
-  R.sun.shadow.bias = -0.0004; R.sun.shadow.normalBias = 0.03;
-  R.sun.shadow.camera.near = 1; R.sun.shadow.camera.far = 420;
-  scene.add(R.sun, R.sun.target);
-  R.hemi = new THREE.HemisphereLight(0x9cc4ff, 0x4a3b2a, 1.4);
-  scene.add(R.hemi);
+  // sol (cascata 0 das sombras) + cascatas extras, sonda de luz ambiente e luzes dinâmicas
+  R.sun = initLighting(scene);
+  // a luz hemisférica antiga virou uma sonda de harmônicos esféricos (lighting.js); o objeto fica só para cálculos
+  R.hemi = new THREE.HemisphereLight(0x9cc4ff, 0x4a3b2a, 0);
   R.pmrem = new THREE.PMREMGenerator(renderer);
   R.envScene = new THREE.Scene();
   R.envScene.add(new THREE.Mesh(new THREE.SphereGeometry(400, 32, 16), makeSkyMaterial(0)));
@@ -200,38 +200,14 @@ export async function applyGraphics(key) {
   }
   if (!all && prev.veg !== eff.veg) rebuildAllChunks();
   if (all || prev.res !== eff.res) resize();
-  if (all || prev.shadows !== eff.shadows) applyShadows();
+  if (all || prev.shadows !== eff.shadows || prev.dynLights !== eff.dynLights || prev.torchShadows !== eff.torchShadows) applyLighting();
+  if (all || prev.tex !== eff.tex) resetGroundCache();
   if (all || prev.envMap !== eff.envMap) { R.envAngle = -99; if (!eff.envMap) { G.scene.environment = null; if (R.envRT) { R.envRT.dispose(); R.envRT = null; } } }
   if (all || prev.rd !== eff.rd) R.needKey = '';
   U.uCaustics.value = eff.water >= 2 ? 1 : 0;
   hook('graphicsApplied', key, prev, eff);
   return !!eff.aa !== R.createdAA;
 }
-let appliedShadowLevel = -1;
-function applyShadows() {
-  const eff = G.eff, renderer = G.renderer;
-  const lvl = SHADOW_LEVELS[eff.shadows];
-  const on = !!lvl;
-  const was = renderer.shadowMap.enabled;
-  renderer.shadowMap.enabled = on;
-  R.sun.castShadow = on;
-  if (on) {
-    renderer.shadowMap.type = lvl.soft ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
-    R.sun.shadow.mapSize.set(lvl.size, lvl.size);
-    R.sun.shadow.radius = lvl.soft ? 1 : 1.5;
-    const cam = R.sun.shadow.camera;
-    cam.left = cam.bottom = -lvl.range; cam.right = cam.top = lvl.range;
-    cam.updateProjectionMatrix();
-    if (R.sun.shadow.map) { R.sun.shadow.map.dispose(); R.sun.shadow.map = null; }
-    U.uShadowRange.value = lvl.range;
-  } else U.uShadowRange.value = 1e6;
-  if (G.world) for (const c of G.world.chunks.values()) for (const m of [c.mesh, c.cut]) if (m) { m.castShadow = m.receiveShadow = on; }
-  if (was !== on || appliedShadowLevel !== eff.shadows) for (const m of [R.mats.opaque, R.mats.cutout]) if (m) m.needsUpdate = true;
-  appliedShadowLevel = eff.shadows;
-  R.shadowDirty = true;
-  hook('shadowsApplied', on);
-}
-
 // ---------------- malhas dos chunks ----------------
 function makeGeometry(r) {
   const g = new THREE.BufferGeometry();
@@ -253,7 +229,7 @@ export function disposeChunkMeshes(c) {
 }
 function applyMesh(c, res) {
   disposeChunkMeshes(c);
-  const shadows = G.eff.shadows > 0;
+  const shadows = G.renderer.shadowMap.enabled;
   if (res.opaque) { c.mesh = new THREE.Mesh(makeGeometry(res.opaque), R.mats.opaque); c.mesh.castShadow = c.mesh.receiveShadow = shadows; }
   if (res.cutout) { c.cut = new THREE.Mesh(makeGeometry(res.cutout), R.mats.cutout); c.cut.customDepthMaterial = R.mats.depth; c.cut.castShadow = c.cut.receiveShadow = shadows; }
   if (res.water) { c.water = new THREE.Mesh(makeGeometry(res.water), R.mats.water); c.water.renderOrder = 3; }
@@ -390,16 +366,32 @@ export function updateSky(weather = { rain: 0, storm: 0, flash: 0 }, under = 0) 
   R.sky01 = { day, night, sunY: sy };
   U.uSunDir.value.copy(sunDir);
   U.uNight.value = night;
-  U.uZenith.value.copy(PAL.zNight).lerp(PAL.zDay, day).lerp(PAL.zTwi, twi * 0.45).lerp(_c3.copy(PAL.zStorm).multiplyScalar(0.2 + 0.8 * day), wet * 0.85);
-  U.uHorizon.value.copy(PAL.hNight).lerp(PAL.hDay, day).lerp(PAL.hTwi, twi * 0.55 * smoothstep(-0.25, 0.0, sy)).lerp(_c3.copy(PAL.hStorm).multiplyScalar(0.15 + 0.85 * day), wet * 0.85);
-  U.uSunGlow.value.copy(PAL.glowDay).lerp(PAL.glowTwi, twi).multiplyScalar(smoothstep(-0.2, 0.05, sy) * (1 - wet * 0.85));
-  U.uSunDisc.value.setRGB(14, 11, 7).lerp(_c1.setRGB(14, 5, 1.5), twi).multiplyScalar(smoothstep(-0.06, 0.02, sy) * (1 - wet));
+  U.uStarRot.value = -ang;
+  U.uMoonPhase.value = (((G.day || 0) % 8) + 0.5) / 8;
+  const phys = eff.sky ? physSky(ang) : null;
+  if (phys) {
+    // céu físico (dispersão atmosférica) + céu noturno + tom da "hora azul"
+    U.uZenith.value.copy(phys.zenith).add(_c1.copy(PAL.zNight).multiplyScalar(night)).lerp(PAL.zTwi, twi * 0.25 * (1 - day)).lerp(_c3.copy(PAL.zStorm).multiplyScalar(0.2 + 0.8 * day), wet * 0.85);
+    U.uHorizon.value.copy(phys.horizon).add(_c1.copy(PAL.hNight).multiplyScalar(night)).lerp(_c3.copy(PAL.hStorm).multiplyScalar(0.15 + 0.85 * day), wet * 0.85);
+    U.uSunGlow.value.copy(phys.glow).multiplyScalar(1 - wet * 0.85);
+    U.uSunDisc.value.copy(phys.sun).multiplyScalar(16 * smoothstep(-0.06, 0.02, sy) * (1 - wet));
+  } else {
+    U.uZenith.value.copy(PAL.zNight).lerp(PAL.zDay, day).lerp(PAL.zTwi, twi * 0.45).lerp(_c3.copy(PAL.zStorm).multiplyScalar(0.2 + 0.8 * day), wet * 0.85);
+    U.uHorizon.value.copy(PAL.hNight).lerp(PAL.hDay, day).lerp(PAL.hTwi, twi * 0.55 * smoothstep(-0.25, 0.0, sy)).lerp(_c3.copy(PAL.hStorm).multiplyScalar(0.15 + 0.85 * day), wet * 0.85);
+    U.uSunGlow.value.copy(PAL.glowDay).lerp(PAL.glowTwi, twi).multiplyScalar(smoothstep(-0.2, 0.05, sy) * (1 - wet * 0.85));
+    U.uSunDisc.value.setRGB(14, 11, 7).lerp(_c1.setRGB(14, 5, 1.5), twi).multiplyScalar(smoothstep(-0.06, 0.02, sy) * (1 - wet));
+  }
   if (weather.flash > 0) { U.uZenith.value.lerp(_c1.setRGB(1.6, 1.7, 2), weather.flash * 0.6); U.uHorizon.value.lerp(_c1.setRGB(1.4, 1.5, 1.8), weather.flash * 0.6); }
   const qa = Math.round(ang / (Math.PI * 2 / 720)) * (Math.PI * 2 / 720);
   lightDir.set(Math.cos(qa), Math.sin(qa), 0.25).normalize();
   const L = settings.light;
   let li;
-  if (lightDir.y >= 0) { li = 2.8 * smoothstep(0.0, 0.14, lightDir.y); _c2.copy(PAL.sunNoon).lerp(PAL.sunSet, twi); }
+  if (lightDir.y >= 0) {
+    li = 2.8 * smoothstep(0.0, 0.14, lightDir.y);
+    // céu físico: a cor do sol é a luz que atravessou a atmosfera (laranja no fim da tarde)
+    if (phys) { _c2.copy(phys.sun); const m = Math.max(_c2.r, _c2.g, _c2.b, 1e-4); _c2.multiplyScalar(1 / m); li *= Math.min(1, m * 1.6); }
+    else _c2.copy(PAL.sunNoon).lerp(PAL.sunSet, twi);
+  }
   else { lightDir.negate(); li = 0.5 * smoothstep(0.0, 0.14, lightDir.y); _c2.copy(PAL.moon); }
   li *= 1 - wet * 0.8;
   R.sun.color.copy(_c2);
@@ -409,8 +401,20 @@ export function updateSky(weather = { rain: 0, storm: 0, flash: 0 }, under = 0) 
   const envOn = !!G.scene.environment;
   R.hemi.color.copy(U.uHorizon.value).lerp(U.uZenith.value, 0.5);
   R.hemi.groundColor.setRGB(0.28, 0.23, 0.17).multiplyScalar(0.25 + 0.75 * day);
-  R.hemi.intensity = ((envOn ? 1.6 : 2.8) * L * (0.3 + 0.7 * day) + 0.9 * night * L) * (1 + wet * 0.4) + weather.flash * 6;
-  U.uAmbient.value.copy(R.hemi.color).multiplyScalar(R.hemi.intensity * 0.5);
+  const ambI = ((envOn ? 1.6 : 2.8) * L * (0.3 + 0.7 * day) + 0.9 * night * L) * (1 + wet * 0.4) + weather.flash * 6;
+  U.uAmbient.value.copy(R.hemi.color).multiplyScalar(ambI * 0.5);
+  // luz ambiente: sonda SH com o céu atual e o rebote colorido do chão (atualizada algumas vezes por segundo)
+  probeT -= 1;
+  if (probeT <= 0 || weather.flash > 0.05) {
+    probeT = 15;
+    const grass = G.world && G.player ? BIOME_GRASS[G.world.biomeAt(Math.floor(G.player.pos.x), Math.floor(G.player.pos.z))] : null;
+    updateGround(0.25, R.atlas, R.uv, grass);
+    _c1.copy(U.uZenith.value).lerp(U.uHorizon.value, 0.5);
+    const norm = Math.max(_c1.r, _c1.g, _c1.b, 1e-3);
+    // a cor do céu define o tom; a intensidade segue a calibração antiga da luz hemisférica
+    _zn.copy(U.uZenith.value).multiplyScalar(1 / norm * 0.62); _hz.copy(U.uHorizon.value).multiplyScalar(1 / norm * 0.62);
+    updateProbe(_zn, _hz, _c2, lightDir, ambI, 0.25 + 0.75 * day);
+  }
   U.uMinLight.value = 0.03 + 0.03 * (L - 0.5);
   G.renderer.toneMappingExposure = 0.95 * (1 + 0.9 * night) * (settings.exposure || 1);
   if (R.cloudMat.uniforms.uCloudLit) {
@@ -429,24 +433,20 @@ export function updateSky(weather = { rain: 0, storm: 0, flash: 0 }, under = 0) 
   return qa;
 }
 
+let probeT = 0, physKey = -1;
+const _zn = new THREE.Color(), _hz = new THREE.Color();
+const PHYS = { zenith: new THREE.Color(), horizon: new THREE.Color(), glow: new THREE.Color(), sun: new THREE.Color() };
+const _sd = new THREE.Vector3();
+// céu físico recalculado só quando o sol anda um passo (≈0,5°), não a cada quadro
+function physSky(ang) {
+  const key = Math.round(ang / (Math.PI * 2 / 720));
+  if (key !== physKey) { physKey = key; const a = key * (Math.PI * 2 / 720); physicalSky(_sd.set(Math.cos(a), Math.sin(a), 0.25).normalize(), PHYS); probeT = 0; }
+  return PHYS;
+}
 const _lx = new THREE.Vector3(), _ly = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0), _ctr = new THREE.Vector3();
-export function updateShadows(force) {
-  const lvl = SHADOW_LEVELS[G.eff.shadows];
-  const renderer = G.renderer;
-  if (!lvl || !renderer.shadowMap.enabled) { renderer.shadowMap.needsUpdate = false; return; }
-  if (!(force || R.shadowDirty || R.frameNo % lvl.every === 0)) return;
-  const texel = (lvl.range * 2) / lvl.size;
-  _lx.crossVectors(_up, lightDir).normalize();
-  _ly.crossVectors(lightDir, _lx);
-  const p = G.camera.position;
-  const ax = Math.round(p.dot(_lx) / texel) * texel, ay = Math.round(p.dot(_ly) / texel) * texel, az = p.dot(lightDir);
-  _ctr.copy(_lx).multiplyScalar(ax).addScaledVector(_ly, ay).addScaledVector(lightDir, az);
-  R.sun.target.position.copy(_ctr);
-  R.sun.position.copy(_ctr).addScaledVector(lightDir, 200);
-  R.sun.target.updateMatrixWorld();
-  R.sun.updateMatrixWorld();
-  U.uShadowCenter.value.copy(_ctr);
-  renderer.shadowMap.needsUpdate = true;
+export function updateShadows(force, dt = 1 / 60) {
+  updateDynamicLights(dt);
+  updateCascades(G.camera, lightDir, force || R.shadowDirty, dt);
   R.shadowDirty = false;
 }
 

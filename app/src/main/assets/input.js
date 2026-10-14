@@ -125,6 +125,7 @@ export function initInput(canvas, actions) {
     if (e.code === 'KeyF') actions.toggleFly();
     if (e.code === 'F5' || e.code === 'KeyV') { e.preventDefault(); actions.camera(); }
     if (e.code === 'KeyM') actions.map();
+    if (e.code === 'KeyP') actions.photo();
     if (e.code === 'KeyT' || e.code === 'Enter') { e.preventDefault(); actions.chat(); }
     if (e.code === 'KeyQ') actions.dropHeld(!!(e.ctrlKey));
     if (e.code.startsWith('Digit')) { const n = parseInt(e.code.slice(5)); if (n >= 1 && n <= 9) actions.select(n - 1); }
