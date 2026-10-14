@@ -1,10 +1,10 @@
 // Configurações gráficas do VoxelCraft: presets, persistência e painel de interface.
 
 export const PRESETS = {
-  low:    { tex: 32,  rd: 3, shadows: 0, water: 0, veg: 1, aa: false, clouds: 1, res: 0.75 },
-  medium: { tex: 64,  rd: 5, shadows: 1, water: 1, veg: 2, aa: false, clouds: 1, res: 1 },
-  high:   { tex: 64,  rd: 6, shadows: 3, water: 2, veg: 3, aa: true,  clouds: 2, res: 1.25 },
-  ultra:  { tex: 128, rd: 8, shadows: 4, water: 3, veg: 3, aa: true,  clouds: 2, res: 1.5 },
+  low:    { tex: 32,  rd: 3, shadows: 0, water: 0, veg: 1, aa: false, clouds: 1, res: 0.75, post: 0, particles: 0.5 },
+  medium: { tex: 64,  rd: 5, shadows: 1, water: 1, veg: 2, aa: false, clouds: 1, res: 1, post: 1, particles: 0.8 },
+  high:   { tex: 64,  rd: 6, shadows: 3, water: 2, veg: 3, aa: true,  clouds: 2, res: 1.25, post: 2, particles: 1 },
+  ultra:  { tex: 128, rd: 8, shadows: 4, water: 3, veg: 3, aa: true,  clouds: 2, res: 1.5, post: 3, particles: 1.25 },
 };
 export const PRESET_ORDER = ['low', 'medium', 'high', 'ultra'];
 export const PRESET_NAMES = { low: 'Baixa', medium: 'Média', high: 'Alta', ultra: 'Ultra', custom: 'Personalizada' };
@@ -23,7 +23,9 @@ export function defaultSettings(isTouch) {
   return Object.assign({
     preset: 'high',
     light: 1, fog: true, fogDensity: 1, fpsCap: isTouch ? 60 : 0, eco: false, auto: true,
-    sens: 1,
+    sens: 1, fov: 75, volume: 0.8, uiScale: 1, invertY: false, minimap: true, showInfo: true, compass: true, viewBob: true,
+    reduceFlash: false, highContrast: false, name: 'Jogador', skin: null, camDefault: 0,
+    bloom: true, vignette: true, grading: true,
   }, PRESETS.high);
 }
 
@@ -53,6 +55,7 @@ export function effective(s) {
     e.clouds = Math.min(s.clouds, 1); e.veg = Math.min(s.veg, 1);
     e.res = Math.min(s.res, 0.6); e.rd = Math.min(s.rd, 4);
     e.fpsCap = s.fpsCap === 0 ? 30 : Math.min(s.fpsCap, 30);
+    e.post = 0; e.particles = Math.min(s.particles, 0.5);
   }
   e.pbr = !s.eco && e.tex >= 64;
   e.normalMaps = e.tex >= 64;
@@ -76,6 +79,11 @@ const SCHEMA = [
   { key: 'veg', label: 'Densidade da vegetação', type: 'select', num: true, options: [[0, 'Nenhuma'], [1, 'Baixa'], [2, 'Média'], [3, 'Alta']] },
   { key: 'clouds', label: 'Nuvens', type: 'select', num: true, options: [[0, 'Desligadas'], [1, 'Simples'], [2, 'Volumétricas']] },
   { key: 'aa', label: 'Antialiasing (MSAA)', type: 'check', note: 'reinicia o renderizador' },
+  { key: 'post', label: 'Pós-processamento', type: 'select', num: true, options: [[0, 'Desligado'], [1, 'Leve (cor + vinheta)'], [2, 'Médio (+ brilho/bloom)'], [3, 'Alto (+ FXAA)']] },
+  { key: 'bloom', label: '  Brilho (bloom)', type: 'check', keepPreset: true },
+  { key: 'vignette', label: '  Vinheta', type: 'check', keepPreset: true },
+  { key: 'grading', label: '  Correção de cor', type: 'check', keepPreset: true },
+  { key: 'particles', label: 'Densidade de partículas', type: 'range', min: 0, max: 1.5, step: 0.25, fmt: (v) => `${Math.round(v * 100)}%` },
   { key: 'res', label: 'Resolução de renderização', type: 'select', num: true, options: [[0.5, '50%'], [0.6, '60%'], [0.75, '75%'], [1, '100%'], [1.25, '125%'], [1.5, '150%'], [2, '200%']] },
   { key: 'fog', label: 'Neblina e efeitos atmosféricos', type: 'check', keepPreset: true },
   { key: 'fogDensity', label: 'Densidade da neblina', type: 'range', min: 0.3, max: 2, step: 0.1, fmt: (v) => `${Math.round(v * 100)}%`, keepPreset: true },

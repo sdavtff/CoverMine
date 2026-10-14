@@ -4,13 +4,9 @@
 // periódicas (sem emendas) e ficam num atlas com margem ("gutter") para permitir mipmaps
 // sem vazamento de cor entre tiles.
 
-export const TILE = {
-  GRASS_TOP: 0, GRASS_SIDE: 1, DIRT: 2, STONE: 3, LOG_SIDE: 4, LOG_TOP: 5, LEAVES: 6, SAND: 7,
-  WATER: 8, PLANKS: 9, BRICK: 10, GLASS: 11, COBBLE: 12, SNOW: 13, SNOW_SIDE: 14, BEDROCK: 15,
-  GRAVEL: 16, LAMP: 17, BIRCH_SIDE: 18, BIRCH_TOP: 19, PINE_LEAVES: 20, TALLGRASS: 21, FLOWER_RED: 22, FLOWER_YELLOW: 23,
-};
-export const ATLAS_COLS = 8, ATLAS_ROWS = 4;
-const PLANT_TILES = new Set([TILE.TALLGRASS, TILE.FLOWER_RED, TILE.FLOWER_YELLOW]);
+import { TILE, ATLAS_COLS, ATLAS_ROWS, CLAMP_TILES } from './tiles.js';
+export { TILE, ATLAS_COLS, ATLAS_ROWS };
+const PLANT_TILES = CLAMP_TILES;
 
 // ---------------- noise helpers (periódicos) ----------------
 function ihash(x, y, s) {
@@ -353,10 +349,16 @@ const GEN = {
   [TILE.FLOWER_YELLOW]: (u, v, px, py) => plant(u, v, px, py, 231, 2),
 };
 
+import { EXTRA_GEN, EXTRA_ROUGH, EXTRA_BUMP } from './textures2.js';
+Object.assign(GEN, EXTRA_GEN(GEN_HELPERS()));
+Object.assign(ROUGH, EXTRA_ROUGH);
+Object.assign(BUMP, EXTRA_BUMP);
+function GEN_HELPERS() { return { ihash, vnoise, fbm, worley, mixc, mulc, smooth, clamp01, mod, dirtPx, stonePx, grassCol, sideOverhang, woodRings, plant, GEN }; }
+
 // ---------------- atlas ----------------
-// tileSize: 32 / 64 / 128 pixels. Cada célula tem 2×tileSize (margem de tileSize/2 em cada lado).
-export function buildAtlas(tileSize) {
-  const T = tileSize, C = T * 2, G = T / 2;
+// tileSize: 32 / 64 / 128 pixels. Cada célula tem 1,5×tileSize (margem de tileSize/4 em cada lado).
+export function buildAtlas(tileSize, onlyTiles) {
+  const T = tileSize, G = T / 4, C = T + G * 2;
   const W = ATLAS_COLS * C, H = ATLAS_ROWS * C;
   const albedo = new Uint8Array(W * H * 4);
   const normal = new Uint8Array(W * H * 4);
@@ -365,6 +367,7 @@ export function buildAtlas(tileSize) {
   const tA = new Float32Array(T * T * 4), tH = new Float32Array(T * T);
   for (const key in GEN) {
     const tile = +key, gen = GEN[tile];
+    if (onlyTiles && !onlyTiles.has(tile)) continue;
     const plantTile = PLANT_TILES.has(tile);
     // gera em espaço normalizado; px/py inteiros em resolução fixa de 128 para estabilidade do grão
     const gs = 128 / T;
@@ -384,8 +387,8 @@ export function buildAtlas(tileSize) {
     const hAt = plantTile
       ? (x, y) => tH[Math.min(T - 1, Math.max(0, y)) * T + Math.min(T - 1, Math.max(0, x))]
       : (x, y) => tH[mod(y, T) * T + mod(x, T)];
-    const bump = BUMP[tile] * (T / 64);
-    const rough = ROUGH[tile];
+    const bump = (BUMP[tile] ?? 2.5) * (T / 64);
+    const rough = ROUGH[tile] ?? 0.85;
     const col = tile % ATLAS_COLS, row = Math.floor(tile / ATLAS_COLS);
     const ox = col * C + G, oy = row * C + G;
     // escreve tile + margem (repetição periódica; plantas usam extensão da borda)

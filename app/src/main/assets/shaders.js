@@ -433,3 +433,17 @@ export function makeDepthMaterial(map) {
   m.customProgramCacheKey = () => 'vc-depth';
   return m;
 }
+
+// Entidades (criaturas, jogador, itens): neblina atmosférica igual à do terreno.
+export function patchEntityMaterial(mat) {
+  mat.fog = false;
+  mat.onBeforeCompile = (shader) => {
+    for (const k of ['uTime', 'uSunDir', 'uZenith', 'uHorizon', 'uSunGlow', 'uSunDisc', 'uNight', 'uFogStart', 'uFogEnd', 'uFogDensity', 'uUnderwater', 'uUnderColor']) shader.uniforms[k] = U[k];
+    shader.vertexShader = 'varying vec3 vWorldP;\n' + shader.vertexShader
+      .replace('#include <project_vertex>', '#include <project_vertex>\n{ vec4 wp4 = vec4(transformed, 1.0);\n#ifdef USE_INSTANCING\n wp4 = instanceMatrix * wp4;\n#endif\n vWorldP = (modelMatrix * wp4).xyz; }');
+    shader.fragmentShader = SKY_GLSL + FOG_GLSL + 'varying vec3 vWorldP;\n' + shader.fragmentShader
+      .replace('#include <opaque_fragment>', '#include <opaque_fragment>\ngl_FragColor.rgb = vcFog(gl_FragColor.rgb, vWorldP);');
+  };
+  mat.customProgramCacheKey = () => 'vc-entity';
+  return mat;
+}
