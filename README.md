@@ -1,4 +1,4 @@
-# VoxelCraft HD 3.1
+# VoxelCraft HD 3.1.1
 
 Jogo sandbox de blocos para **Android** (WebView) e **PC** (Electron), feito em JavaScript com Three.js r160
 (a mesma versão do original). A versão 3.0 transforma o VoxelCraft num sandbox completo: mundo procedural
