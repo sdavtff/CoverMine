@@ -44,11 +44,16 @@ ipcMain.handle('vc-host', async (_e, port) => {
   try {
     if (!hosted) {
       const { startServer } = require('./server.js');
-      hosted = await startServer({ port: port || 8765, dataDir: path.join(app.getPath('userData'), 'salas') });
+      // se a porta estiver ocupada (outro programa), tenta as próximas
+      let last = null;
+      for (let p = port || 8765; p < (port || 8765) + 6 && !hosted; p++) {
+        try { hosted = await startServer({ port: p, dataDir: path.join(app.getPath('userData'), 'salas') }); } catch (e) { last = e; if (e.code !== 'EADDRINUSE') break; }
+      }
+      if (!hosted) throw last || new Error('não foi possível abrir o servidor');
     }
-    return { ok: true, addresses: hosted.addresses };
+    return { ok: true, port: hosted.port, addresses: hosted.addresses };
   } catch (e) {
-    return { ok: false, error: e.code === 'EADDRINUSE' ? 'a porta ' + (port || 8765) + ' já está em uso' : e.message };
+    return { ok: false, error: e.code === 'EADDRINUSE' ? 'as portas ' + (port || 8765) + ' a ' + ((port || 8765) + 5) + ' já estão em uso' : e.message };
   }
 });
 app.on('before-quit', () => { if (hosted) hosted.close(); });

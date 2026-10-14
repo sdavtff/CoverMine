@@ -339,7 +339,7 @@ export function showMultiplayer() {
       setStatus('Ligando o servidor...');
       const info = await window.vcDesktop.host(8765);
       if (!info || !info.ok) { setStatus('Não foi possível ligar o servidor: ' + (info && info.error)); return; }
-      addr.value = 'localhost:8765';
+      addr.value = 'localhost:' + (info.port || 8765);
       await load();
       setStatus(`Servidor ligado. Seus amigos usam o endereço: ${info.addresses.join(' ou ')}`);
     };

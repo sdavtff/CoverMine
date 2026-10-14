@@ -287,6 +287,8 @@ function startServer(opts = {}) {
     res.end(`Servidor VoxelCraft ativo. Salas abertas: ${rooms.size}\n`);
   });
   const wss = new WebSocketServer({ server, maxPayload: MAX_MSG });
+  // erros de rede (ex.: porta ocupada) chegam pelo servidor HTTP; sem isso o processo cairia
+  wss.on('error', () => {});
   wss.on('connection', (ws, req) => {
     const c = { id: nextId++, ws, name: '?', pos: { x: 0, y: 80, z: 0 }, rateT: 0, rateN: 0, alive: true };
     ws.on('pong', () => { c.alive = true; });
