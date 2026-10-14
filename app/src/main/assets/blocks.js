@@ -15,8 +15,10 @@ export const B = {
   ELEVATOR: 70, IRON_BLOCK: 71, GOLD_BLOCK: 72, DIAMOND_BLOCK: 73, COPPER_BLOCK: 74, FARMLAND: 75, WHEAT: 76,
   PATH: 77, MOSSY_COBBLE: 78, STONE_BRICKS: 79, CRYSTAL_BLOCK: 80, SAPLING: 81,
   FIRE: 82, TNT: 83, DRIPSTONE: 84, VINE: 85,
+  OBSIDIAN: 86, NETHERRACK: 87, SOUL_SAND: 88, GLOWSTONE: 89, NETHER_BRICK: 90, QUARTZ_ORE: 91, NETHER_PORTAL: 92,
+  END_STONE: 93, END_FRAME: 94, END_FRAME_EYE: 95, END_PORTAL: 96, DRAGON_EGG: 97,
 };
-export const BLOCK_COUNT = 86;
+export const BLOCK_COUNT = 98;
 
 // direções horizontais (meta "facing"): 0 = +z (sul), 1 = -x (oeste), 2 = -z (norte), 3 = +x (leste)
 export const FACING = [[0, 1], [-1, 0], [0, -1], [1, 0]];
@@ -109,6 +111,19 @@ const DEF = {
   [B.FIRE]: { name: 'Fogo', t: cube(T.FIRE), hard: 0, shape: 'cross', light: 15, drop: null, sound: 'grass', hidden: 1, fire: 1 },
   [B.TNT]: { name: 'TNT', t: [T.TNT_TOP, T.TNT_SIDE, T.TNT_TOP], hard: 0, sound: 'grass', tnt: 1, flammable: 1 },
   [B.DRIPSTONE]: { name: 'Estalactite', t: cube(T.DRIPSTONE), hard: 1.2, tool: 'pickaxe', shape: 'cross', sound: 'stone' },
+  // ---- Nether e End ----
+  [B.OBSIDIAN]: { name: 'Obsidiana', t: cube(T.OBSIDIAN), hard: 25, tool: 'pickaxe', tier: 4, sound: 'stone' },
+  [B.NETHERRACK]: { name: 'Netherrack', t: cube(T.NETHERRACK), hard: 0.6, tool: 'pickaxe', tier: 1, sound: 'stone', burns: 1 },
+  [B.SOUL_SAND]: { name: 'Areia das almas', t: cube(T.SOUL_SAND), hard: 0.5, tool: 'shovel', sound: 'sand', slow: 1 },
+  [B.GLOWSTONE]: { name: 'Pedra luminosa', t: cube(T.GLOWSTONE), light: 15, hard: 0.3, sound: 'glass', drop: 'glowstone_dust' },
+  [B.NETHER_BRICK]: { name: 'Tijolo do Nether', t: cube(T.NETHER_BRICK), hard: 2, tool: 'pickaxe', tier: 1, sound: 'stone' },
+  [B.QUARTZ_ORE]: { name: 'Minério de quartzo', t: cube(T.QUARTZ_ORE), hard: 3, tool: 'pickaxe', tier: 1, drop: 'quartz', xp: 2, sound: 'stone' },
+  [B.NETHER_PORTAL]: { name: 'Portal do Nether', t: cube(T.NETHER_PORTAL), glass: 1, pass: 1, light: 11, hard: -1, drop: null, hidden: 1, portal: 'nether' },
+  [B.END_STONE]: { name: 'Pedra do End', t: cube(T.END_STONE), hard: 3, tool: 'pickaxe', tier: 1, sound: 'stone' },
+  [B.END_FRAME]: { name: 'Moldura do portal do End', t: [T.END_FRAME_TOP, T.END_FRAME_SIDE, T.END_STONE], hard: -1, sound: 'stone', use: 'endframe' },
+  [B.END_FRAME_EYE]: { name: 'Moldura com olho', t: [T.END_FRAME_EYE, T.END_FRAME_SIDE, T.END_STONE], light: 3, hard: -1, sound: 'stone', hidden: 1 },
+  [B.END_PORTAL]: { name: 'Portal do End', t: cube(T.END_PORTAL), pass: 1, light: 15, hard: -1, drop: null, hidden: 1, portal: 'end' },
+  [B.DRAGON_EGG]: { name: 'Ovo do dragão', t: cube(T.DRAGON_EGG), light: 1, hard: 3, tool: 'pickaxe', sound: 'stone' },
   [B.VINE]: { name: 'Cipó', t: cube(T.VINE), hard: 0.2, shape: 'cross', climb: 1, tint: 'leaves', sound: 'grass', flammable: 1 },
 };
 
@@ -127,7 +142,7 @@ for (let i = 0; i < BLOCK_COUNT; i++) {
   const shaped = !!d.shape;
   SHAPED[i] = shaped ? 1 : 0;
   LIQUID[i] = d.liquid || 0;
-  const passable = d.liquid || ['cross', 'torch', 'wire', 'rail', 'crop', 'button', 'plate'].includes(d.shape);
+  const passable = d.liquid || d.pass || ['cross', 'torch', 'wire', 'rail', 'crop', 'button', 'plate'].includes(d.shape);
   TRANSP[i] = (d.liquid === 1 || d.leaves || d.glass || shaped) ? 1 : 0;
   FULL[i] = (!shaped && !d.liquid) ? 1 : 0;
   OCC[i] = (FULL[i] && !d.glass) ? 1 : 0;

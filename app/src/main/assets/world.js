@@ -1,6 +1,7 @@
 // Mundo: chunks (blocos + metadados + bioma), edições do jogador, dados de blocos (baús, fornalhas)
 // e geração em Web Workers. Sem dependência de THREE.
 import { WorldGen, CS, H } from './worldgen.js';
+import { makeDimGen } from './dimgen.js';
 import { B, BLOCKS, EMIT } from './blocks.js';
 
 export { CS, H };
@@ -10,7 +11,8 @@ export class World {
   constructor(opts) {
     this.seed = opts.seed | 0;
     this.genVersion = opts.gen || 3;
-    this.gen = new WorldGen(this.seed, this.genVersion);
+    this.gen = makeDimGen(this.seed, this.genVersion) || new WorldGen(this.seed, this.genVersion);
+    this.dim = this.gen.dim || 'overworld';
     this.sea = this.gen.sea;
     this.chunks = new Map();
     this.pending = new Map();

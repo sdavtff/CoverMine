@@ -73,7 +73,7 @@ export class Mob extends Ent {
     if (t.npc) { this.profession = this.variant; this.trades = null; this.quest = null; this.home = null; this.village = null; }
   }
   get T() { return MOBS[this.type]; }
-  get scale() { return this.baby > 0 ? 0.55 : 1; }
+  get scale() { return (this.baby > 0 ? 0.55 : 1) * (this.T.scale || 1); }
 }
 
 // ---------------- itens no chão ----------------
@@ -224,7 +224,7 @@ function pickEntity(o, d, maxT) {
   let best = null, bt = maxT;
   for (const e of E.list) {
     if (e.dead || !(e.kind === 'mob' || e.kind === 'boat' || e.kind === 'minecart') || e === G.player.riding) continue;
-    if (Math.abs(e.pos.x - o.x) > 8 || Math.abs(e.pos.z - o.z) > 8) continue;
+    if (Math.abs(e.pos.x - o.x) > 8 + e.hw || Math.abs(e.pos.z - o.z) > 8 + e.hw) continue;
     const t = rayAABB(o, d, e, bt);
     if (t !== null && t < bt) { bt = t; best = e; }
   }
@@ -248,16 +248,37 @@ export function attackEntity(e, dmg, attacker) {
     const dx = e.pos.x - attacker.pos.x, dz = e.pos.z - attacker.pos.z, dd = Math.hypot(dx, dz) || 1;
     e.vel.x += dx / dd * 6; e.vel.z += dz / dd * 6; e.vel.y = 5;
     if (t.passive || t.npc) e.flee = 5;
-    if (t.hostile) e.target = attacker;
+    if (t.hostile || t.neutral) e.target = attacker;
+    if (t.boss) { e.vel.x = e.vel.y = e.vel.z = 0; }
     e.attacker = attacker;
   }
+  // enderman: some ao ser atingido e reaparece perto
+  if (t.teleports && e.health > 0 && Math.random() < 0.55) teleportMob(e);
   hook('sound', 'hurt_mob', e.type);
   PT.sparks(e.pos.x, e.pos.y + e.hh * 0.6, e.pos.z, [0.8, 0.1, 0.1]);
   if (e.health <= 0) killMob(e, attacker);
 }
+function teleportMob(e) {
+  const w = G.world;
+  for (let i = 0; i < 12; i++) {
+    const x = Math.floor(e.pos.x + (Math.random() - 0.5) * 16), z = Math.floor(e.pos.z + (Math.random() - 0.5) * 16);
+    for (let y = Math.floor(e.pos.y) + 6; y > Math.floor(e.pos.y) - 8; y--) {
+      if (SOLID[w.getBlock(x, y - 1, z)] && !w.getBlock(x, y, z) && !w.getBlock(x, y + 1, z) && !w.getBlock(x, y + 2, z)) {
+        PT.smoke(e.pos.x, e.pos.y + 1.5, e.pos.z, 14, [0.6, 0.2, 0.8]);
+        e.pos.x = x + 0.5; e.pos.y = y; e.pos.z = z + 0.5; e.vel.x = e.vel.z = 0;
+        PT.smoke(e.pos.x, e.pos.y + 1.5, e.pos.z, 14, [0.6, 0.2, 0.8]);
+        hook('sound', 'elevator');
+        return;
+      }
+    }
+  }
+}
 function killMob(e, attacker) {
   e.dead = true;
   const t = e.T;
+  if (t.onDeath) hook(t.onDeath, e, attacker);
+  if (attacker === G.player && t.noCorpse) { G.player.stats.mobsKilled++; hook('challengeEvent', 'kill', e.type); return; }
+  if (t.noCorpse) return;
   // corpo tomba de lado (com o empurrão do golpe) e some numa nuvem de fumaça
   E.corpses.push({ type: e.type, variant: e.variant, x: e.pos.x, y: e.pos.y, z: e.pos.z, yaw: e.yaw, scale: e.scale, t: 0, vx: e.vel.x * 0.4, vz: e.vel.z * 0.4, light: e.light || 1, side: Math.random() < 0.5 ? 1 : -1, hh: e.hh });
   hook('sound', 'death_mob', e.type);
@@ -353,7 +374,8 @@ export function updateEntities(dt) {
     const dx = e.pos.x - pp.x, dz = e.pos.z - pp.z;
     const far = dx * dx + dz * dz;
     // entidades em chunks não carregados ficam congeladas
-    if (!w.chunks.has(Math.floor(e.pos.x / 16) + ',' + Math.floor(e.pos.z / 16))) { e.frozen = true; continue; }
+    // (o dragão voa por toda a ilha: nunca congela)
+    if (!w.chunks.has(Math.floor(e.pos.x / 16) + ',' + Math.floor(e.pos.z / 16)) && e.type !== 'dragon') { e.frozen = true; continue; }
     e.frozen = false;
     e.age += dt;
     e.lightT -= dt;
@@ -394,15 +416,15 @@ function updateItem(e, dt) {
 }
 function updateArrow(e, dt) {
   if (e.stuck) { if (e.age > 30) e.dead = true; if (e.owner === G.player && Math.hypot(e.pos.x - G.player.pos.x, e.pos.y - G.player.pos.y - 0.5, e.pos.z - G.player.pos.z) < 1.3) { if (G.mode !== 'creative') G.player.inv.add('arrow', 1); e.dead = true; hook('sound', 'pickup'); } return; }
-  e.vel.y -= 20 * dt;
+  if (e.fire) { if (Math.random() < 0.6) PT.smoke(e.pos.x, e.pos.y, e.pos.z, 1, [1, 0.5, 0.1]); } else e.vel.y -= 20 * dt;
   const steps = 4;
   for (let s = 0; s < steps; s++) {
     e.pos.x += e.vel.x * dt / steps; e.pos.y += e.vel.y * dt / steps; e.pos.z += e.vel.z * dt / steps;
-    if (SOLID[G.world.getBlock(Math.floor(e.pos.x), Math.floor(e.pos.y), Math.floor(e.pos.z))]) { e.stuck = true; e.age = 0; hook('sound', 'arrow_hit'); return; }
+    if (SOLID[G.world.getBlock(Math.floor(e.pos.x), Math.floor(e.pos.y), Math.floor(e.pos.z))]) { if (e.fire) { e.dead = true; hook('ignite', Math.floor(e.pos.x - e.vel.x * 0.02), Math.floor(e.pos.y - e.vel.y * 0.02), Math.floor(e.pos.z - e.vel.z * 0.02)); return; } e.stuck = true; e.age = 0; hook('sound', 'arrow_hit'); return; }
     // acerta jogador ou criaturas
     const pl = G.player;
-    if (e.owner !== pl && !pl.dead && Math.abs(e.pos.x - pl.pos.x) < pl.hw + 0.1 && Math.abs(e.pos.z - pl.pos.z) < pl.hw + 0.1 && e.pos.y > pl.pos.y && e.pos.y < pl.pos.y + pl.hh) { pl.damage(e.dmg, 'arrow', e.owner); e.dead = true; return; }
-    for (const m of E.list) if (m.kind === 'mob' && m !== e.owner && !m.dead && Math.abs(e.pos.x - m.pos.x) < m.hw + 0.1 && Math.abs(e.pos.z - m.pos.z) < m.hw + 0.1 && e.pos.y > m.pos.y && e.pos.y < m.pos.y + m.hh) { attackEntity(m, e.dmg, e.owner && e.owner.pos ? e.owner : null); e.dead = true; return; }
+    if (e.owner !== pl && !pl.dead && Math.abs(e.pos.x - pl.pos.x) < pl.hw + 0.1 && Math.abs(e.pos.z - pl.pos.z) < pl.hw + 0.1 && e.pos.y > pl.pos.y && e.pos.y < pl.pos.y + pl.hh) { pl.damage(e.dmg, e.fire ? 'fire' : 'arrow', e.owner); if (e.fire) pl.burnT = 3; e.dead = true; return; }
+    for (const m of E.list) if (m.kind === 'mob' && m !== e.owner && !m.dead && !(e.fire && m.T.fireImmune) && Math.abs(e.pos.x - m.pos.x) < m.hw + 0.1 && Math.abs(e.pos.z - m.pos.z) < m.hw + 0.1 && e.pos.y > m.pos.y && e.pos.y < m.pos.y + m.hh) { attackEntity(m, e.dmg, e.owner && e.owner.pos ? e.owner : null); e.dead = true; return; }
   }
   if (e.age > 20) e.dead = true;
 }
@@ -533,7 +555,9 @@ function updateMob(e, dt, far2) {
   if (e.baby > 0) e.baby -= dt;
   if (e.woolT > 0) { e.woolT -= dt; if (e.woolT <= 0) e.variant = ['white', 'white', 'gray', 'black', 'brown'][Math.floor(Math.random() * 5)]; }
   // despawn de hostis distantes ou no modo pacífico
-  if (t.hostile && (far2 > 96 * 96 || G.mode === 'peaceful')) { e.dead = true; return; }
+  if (t.boss) { hook('bossAI', e, dt); return; }
+  if ((t.hostile || t.neutral) && (far2 > 96 * 96 || G.mode === 'peaceful')) { e.dead = true; return; }
+  if (t.flies) { flyAI(e, dt); return; }
   const night = R.sky01 ? R.sky01.night : 0;
   let mx = 0, mz = 0, speed = t.speed, jumpWanted = false;
   if (e.ridden) { e.ridden = false; e.walkAmt = Math.min(1, Math.hypot(e.vel.x, e.vel.z) / 4); e.walk += Math.hypot(e.vel.x, e.vel.z) * dt * 1.6; stepEntity(e, dt); if (Math.hypot(e.vel.x, e.vel.z) > 0.2) e.yaw = Math.atan2(e.vel.x, e.vel.z); return; }
@@ -547,7 +571,7 @@ function updateMob(e, dt, far2) {
   const dpx = pl.pos.x - e.pos.x, dpz = pl.pos.z - e.pos.z, dpl = Math.hypot(dpx, dpz);
   if (t.aquatic) { updateFish(e, dt); return; }
   if (t.npc) { const r = npcAI(e, dt); mx = r[0]; mz = r[1]; speed = r[2]; }
-  else if (t.hostile && !pl.dead && G.mode !== 'creative' && G.mode !== 'peaceful' && dpl < 20 && Math.abs(pl.pos.y - e.pos.y) < 10 && (e.target === pl || canSeePlayer(e))) {
+  else if ((t.hostile || (t.neutral && e.target === pl)) && !pl.dead && G.mode !== 'creative' && G.mode !== 'peaceful' && dpl < 20 && Math.abs(pl.pos.y - e.pos.y) < 10 && (e.target === pl || canSeePlayer(e))) {
     e.target = pl;
     if (t.ranged) {
       // esqueleto: mantém distância e atira
@@ -600,6 +624,36 @@ function updateMob(e, dt, far2) {
   }
   moveMob(e, dt, mx, mz, speed, t);
 }
+// blaze: flutua perto do jogador (acima e a alguns blocos) e atira bolas de fogo
+function flyAI(e, dt) {
+  const pl = G.player;
+  const dx = pl.pos.x - e.pos.x, dy = pl.pos.y + 2.5 - e.pos.y, dz = pl.pos.z - e.pos.z, d = Math.hypot(dx, dz);
+  const angry = !pl.dead && G.mode !== 'creative' && G.mode !== 'peaceful' && d < 24 && (e.target === pl || canSeePlayer(e));
+  let tx = 0, ty = Math.sin(e.age * 1.3 + e.id) * 0.8, tz = 0;
+  if (angry) {
+    e.target = pl;
+    const want = d < 6 ? -1 : d > 10 ? 1 : 0;
+    tx = dx / (d || 1) * want * 3; tz = dz / (d || 1) * want * 3; ty += Math.max(-3, Math.min(3, dy)) * 1.2;
+    e.faceYaw = Math.atan2(dx, dz);
+    if (e.cool <= 0 && d < 18 && canSeePlayer(e)) {
+      e.burst = (e.burst || 0) + 1;
+      e.cool = e.burst % 3 ? 0.35 : 3;
+      const from = { x: e.pos.x, y: e.pos.y + 1.4, z: e.pos.z };
+      const ex = pl.pos.x - from.x, ey = pl.pos.y + 1.2 - from.y, ez = pl.pos.z - from.z, ed = Math.hypot(ex, ey, ez);
+      const a = shootArrow(from, { x: ex / ed + (Math.random() - 0.5) * 0.08, y: ey / ed + 0.04, z: ez / ed + (Math.random() - 0.5) * 0.08 }, e, 16);
+      a.fire = true; a.dmg = t5(e);
+      hook('sound', 'ignite', from);
+    }
+  } else { e.wanderT -= dt; if (e.wanderT <= 0) { e.wanderT = 3; e.wx = (Math.random() - 0.5) * 2; e.wz = (Math.random() - 0.5) * 2; } tx = e.wx || 0; tz = e.wz || 0; }
+  const k = Math.min(1, dt * 3);
+  e.vel.x += (tx - e.vel.x) * k; e.vel.y += (ty - e.vel.y) * k; e.vel.z += (tz - e.vel.z) * k;
+  stepEntity(e, dt, { noGravity: true, autoStep: false });
+  e.walk += dt * 4; e.walkAmt = 1;
+  const yawT = e.faceYaw != null ? e.faceYaw : e.yaw; e.faceYaw = null;
+  e.yaw = lerpAngle(e.yaw, yawT, dt * 6);
+  if (Math.random() < dt * 4) PT.smoke(e.pos.x + (Math.random() - 0.5) * 0.6, e.pos.y + Math.random() * 1.4, e.pos.z + (Math.random() - 0.5) * 0.6, 1, [0.9, 0.5, 0.1]);
+}
+const t5 = (e) => e.T.attack || 5;
 function moveMob(e, dt, mx, mz, speed, t) {
   const w = G.world;
   // evita penhascos e lava
@@ -742,10 +796,30 @@ function trySpawnPassive() {
     if (w.peekBlock(x, y, z) === B.WATER && w.peekBlock(x, y - 1, z) === B.WATER) spawnMob('fish', x + 0.5, y, z + 0.5);
   }
 }
+// Nether: blazes nas fortalezas; End: endermen sobre a pedra do End
+function spawnOtherDim(w, p) {
+  if (w.dim === 'nether') {
+    if (countNear((e) => e.kind === 'mob' && e.type === 'blaze', 64) >= 5) return;
+    const f = w.gen.fortressNear(p.x, p.z);
+    if (!f || Math.hypot(f.x - p.x, f.z - p.z) > 70) return;
+    for (let i = 0; i < 4; i++) {
+      const along = (Math.random() - 0.5) * 2 * f.len, side = (Math.random() - 0.5) * 4;
+      const [x, z] = Math.random() < 0.5 ? [f.x + along, f.z + side] : [f.x + side, f.z + along];
+      const y = f.y + 1;
+      if (Math.hypot(x - p.x, z - p.z) < 10) continue;
+      if (w.peekBlock(Math.floor(x), y, Math.floor(z)) === B.AIR && w.peekBlock(Math.floor(x), y + 1, Math.floor(z)) === B.AIR) { spawnMob('blaze', x, y + 0.5, z); return; }
+    }
+  } else if (w.dim === 'end') {
+    if (countNear((e) => e.kind === 'mob' && e.type === 'enderman', 64) >= 6) return;
+    const s = randomSurface(14, 40);
+    if (s && s.ground === B.END_STONE && w.getBlock(s.x, s.y + 1, s.z) === B.AIR && w.getBlock(s.x, s.y + 2, s.z) === B.AIR) spawnMob('enderman', s.x + 0.5, s.y, s.z + 0.5);
+  }
+}
 function trySpawnHostile() {
   if (G.mode === 'peaceful' || G.mode === 'creative' || netGuest()) return;
-  if (countNear((e) => e.kind === 'mob' && e.T.hostile, 64) >= CAP_HOSTILE) return;
   const w = G.world, p = G.player.pos;
+  if (w.dim && w.dim !== 'overworld') { spawnOtherDim(w, p); return; }
+  if (countNear((e) => e.kind === 'mob' && e.T.hostile, 64) >= CAP_HOSTILE) return;
   const night = R.sky01 ? R.sky01.night : 0;
   for (let attempt = 0; attempt < 4; attempt++) {
     const a = Math.random() * Math.PI * 2, r = 18 + Math.random() * 22;
@@ -761,6 +835,8 @@ function trySpawnHostile() {
     if (nearLight(x, y, z, 6) > 0.2) continue;
     // não nasce em aldeias iluminadas nem sobre folhas
     if (w.peekBlock(x, y - 1, z) === B.LEAVES) continue;
+    // endermen são raros (à noite, na superfície): fonte de pérolas antes de ir ao End
+    if (sky && Math.random() < 0.12) { if (w.peekBlock(x, y + 2, z) === B.AIR) spawnMob('enderman', x + 0.5, y, z + 0.5); return; }
     spawnMob(Math.random() < 0.6 ? 'zombie' : 'skeleton', x + 0.5, y, z + 0.5);
     return;
   }
@@ -873,8 +949,8 @@ export function renderEntities() {
         if (d2 < 36 && d2 > 0.5) { let a = Math.atan2(dx, dz) - e.yaw; while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; if (Math.abs(a) < 1.3) headYaw = a; }
       }
       e.hy = (e.hy || 0) + (headYaw - (e.hy || 0)) * Math.min(1, rdt * 6);
-      const st = { walk: e.walk, walkAmt: e.walkAmt, headYaw: e.hy, headPitch: 0, swing: e.swing || 0, zombie: T.zombie, flap: e.flap || 0, holding: T.ranged, t, ph: e.id };
-      mdl.add(_base, st, e.light * (e.burnT > 0 && T.burns ? 1.3 : 1), e.hurt > 0 ? 1 : 0);
+      const st = { walk: e.walk, walkAmt: e.walkAmt, headYaw: T.boss ? (e.headYaw || 0) : e.hy, headPitch: T.boss ? (e.headPitch || 0) : 0, swing: e.swing || 0, zombie: T.zombie, flap: e.flap || 0, holding: T.ranged, t, ph: e.id };
+      mdl.add(_base, st, Math.max(e.light, T.glow || 0) * (e.burnT > 0 && T.burns ? 1.3 : 1), e.hurt > 0 ? 1 : 0);
       continue;
     }
     if (!e.mesh) {
@@ -919,7 +995,7 @@ export function serializeEntities() {
     if (e.dead) continue;
     const base = { k: e.kind, x: +e.pos.x.toFixed(2), y: +e.pos.y.toFixed(2), z: +e.pos.z.toFixed(2), yaw: +e.yaw.toFixed(2) };
     if (e.kind === 'mob') {
-      if (e.T.hostile) continue;
+      if (e.T.hostile || e.T.neutral || e.T.boss) continue;
       Object.assign(base, { t: e.type, v: e.variant, hp: e.health, baby: e.baby > 0 ? Math.round(e.baby) : 0, saddled: e.saddled || 0, home: e.home, village: e.village, trades: e.trades, quest: e.quest, name: e.name });
     } else if (e.kind === 'item') Object.assign(base, { item: e.k, n: e.n, d: e.d, age: Math.round(e.age) });
     else if (e.kind === 'arrow' || e.kind === 'falling' || e.kind === 'tnt') continue;

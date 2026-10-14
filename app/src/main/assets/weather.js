@@ -100,7 +100,7 @@ export function updateWeather(dt) {
     hook('weatherChanged', W.state);
   }
   const biome = G.world.biomeAt(Math.floor(pl.pos.x), Math.floor(pl.pos.z));
-  const dry = biome === BIOME.DESERT || biome === BIOME.SAVANNA;
+  const dry = biome === BIOME.DESERT || biome === BIOME.SAVANNA || biome === BIOME.NETHER || biome === BIOME.END;
   const cold = biome === BIOME.SNOWY || biome === BIOME.SNOWY_MOUNTAIN || pl.pos.y > G.world.sea + 60;
   const wantRain = W.state === 'clear' ? 0 : W.state === 'storm' ? 1 : 0.65;
   const wantStorm = W.state === 'storm' ? 1 : 0;

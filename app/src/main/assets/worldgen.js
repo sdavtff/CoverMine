@@ -7,12 +7,13 @@ import { B } from './blocks.js';
 export const CS = 16, H = 128;
 export const SEA_OLD = 22, SEA3 = 46;
 
-export const BIOME = { OCEAN: 0, BEACH: 1, PLAINS: 2, FOREST: 3, DENSE_FOREST: 4, DESERT: 5, SAVANNA: 6, SWAMP: 7, SNOWY: 8, MOUNTAIN: 9, SNOWY_MOUNTAIN: 10, ROCKY: 11, RIVER: 12, LAKE: 13 };
-export const BIOME_NAMES = ['Oceano', 'Praia', 'Planície', 'Floresta', 'Floresta densa', 'Deserto', 'Savana', 'Pântano', 'Região nevada', 'Montanhas', 'Montanhas nevadas', 'Região rochosa', 'Rio', 'Lago'];
+export const BIOME = { OCEAN: 0, BEACH: 1, PLAINS: 2, FOREST: 3, DENSE_FOREST: 4, DESERT: 5, SAVANNA: 6, SWAMP: 7, SNOWY: 8, MOUNTAIN: 9, SNOWY_MOUNTAIN: 10, ROCKY: 11, RIVER: 12, LAKE: 13, NETHER: 14, END: 15 };
+export const BIOME_NAMES = ['Oceano', 'Praia', 'Planície', 'Floresta', 'Floresta densa', 'Deserto', 'Savana', 'Pântano', 'Região nevada', 'Montanhas', 'Montanhas nevadas', 'Região rochosa', 'Rio', 'Lago', 'Nether', 'The End'];
 // cor média do bioma para o mapa e tingimento (grama, folhas)
 export const BIOME_GRASS = [
   [0.9, 0.93, 0.88], [0.92, 0.92, 0.85], [0.92, 0.95, 0.8], [0.86, 0.93, 0.82], [0.78, 0.9, 0.78], [1, 0.9, 0.6],
   [1, 0.9, 0.62], [0.72, 0.78, 0.6], [0.85, 0.92, 0.95], [0.82, 0.9, 0.86], [0.85, 0.92, 0.95], [0.86, 0.9, 0.82], [0.9, 0.93, 0.88], [0.9, 0.93, 0.88],
+  [0.9, 0.6, 0.5], [0.85, 0.85, 0.7],
 ];
 
 const smooth = (a, b, v) => { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -123,7 +124,56 @@ export class WorldGen {
     const data = new Uint8Array(CS * CS * H), meta = new Uint8Array(CS * CS * H), biome = new Uint8Array(CS * CS);
     if (this.gen < 3) this.generateOld(cx, cz, data, biome);
     else this.generate3(cx, cz, data, meta, biome);
+    this.placeStronghold(cx, cz, data, meta);
     return { data, meta, biome };
+  }
+
+  // ----- fortaleza (stronghold): sala subterrânea com o portal do End -----
+  // fica a 300–700 blocos da origem, em terra firme; os olhos do ender apontam para ela
+  strongholdPos() {
+    if (this._sh) return this._sh;
+    const a = hash2(3, 7, this.seed + 9100) * Math.PI * 2;
+    let d = 300 + Math.floor(hash2(5, 9, this.seed + 9100) * 120), x = 0, z = 0;
+    for (; d < 700; d += 16) {
+      x = Math.round(Math.cos(a) * d); z = Math.round(Math.sin(a) * d);
+      const bm = this.biomeAt(x, z);
+      if (this.heightAt(x, z) > this.sea + 2 && bm !== BIOME.OCEAN && bm !== BIOME.RIVER && bm !== BIOME.LAKE) break;
+    }
+    return (this._sh = { x, z, y: this.gen >= 3 ? 20 : 8 });
+  }
+  placeStronghold(cx, cz, data, meta) {
+    const sh = this.strongholdPos();
+    const x0 = cx * CS, z0 = cz * CS;
+    if (x0 > sh.x + 7 || x0 + CS < sh.x - 7 || z0 > sh.z + 8 || z0 + CS < sh.z - 8) return;
+    const S = CS * CS;
+    const set = (x, y, z, id, m = 0) => {
+      const lx = x - x0, lz = z - z0;
+      if (lx < 0 || lz < 0 || lx >= CS || lz >= CS || y < 1 || y >= H) return;
+      data[lx + lz * CS + y * S] = id; meta[lx + lz * CS + y * S] = m;
+    };
+    const { x: sx, y: sy, z: sz } = sh;
+    // sala de tijolos de pedra (com alguns musgosos), 13×15×8
+    for (let y = sy; y <= sy + 7; y++) for (let z = sz - 7; z <= sz + 7; z++) for (let x = sx - 6; x <= sx + 6; x++) {
+      const shell = y === sy || y === sy + 7 || Math.abs(x - sx) === 6 || Math.abs(z - sz) === 7;
+      set(x, y, z, shell ? (hash3(x, y, z, this.seed + 9200) < 0.2 ? B.MOSSY_COBBLE : B.STONE_BRICKS) : B.AIR);
+    }
+    // plataforma, lava e moldura de 12 blocos (alguns já com olho)
+    const px = sx, pz = sz + 2;
+    for (let z = pz - 3; z <= pz + 3; z++) for (let x = px - 3; x <= px + 3; x++) set(x, sy + 1, z, B.STONE_BRICKS);
+    for (let z = pz - 1; z <= pz + 1; z++) for (let x = px - 1; x <= px + 1; x++) set(x, sy + 1, z, B.LAVA);
+    let k = 0;
+    for (let i = -1; i <= 1; i++) for (const [fx, fz] of [[px + i, pz - 2], [px + i, pz + 2], [px - 2, pz + i], [px + 2, pz + i]]) {
+      set(fx, sy + 2, fz, hash2(k++, 1, this.seed + 9300) < 0.12 ? B.END_FRAME_EYE : B.END_FRAME);
+    }
+    // degraus até a plataforma e tochas nos cantos
+    set(px, sy + 1, pz - 4, B.SLAB_COBBLE);
+    for (const [tx, tz] of [[sx - 5, sz - 6], [sx + 5, sz - 6], [sx - 5, sz + 6], [sx + 5, sz + 6]]) set(tx, sy + 1, tz, B.TORCH, 0);
+    // poço com escada de mão até a superfície (encostada na parede oeste)
+    const lx = sx - 5, lz = sz - 4, top = this.heightAt(lx, lz);
+    for (let y = sy + 1; y <= Math.min(H - 2, top + 1); y++) {
+      if (y >= sy + 7) { set(lx - 1, y, lz, B.STONE_BRICKS); set(lx + 1, y, lz, B.STONE_BRICKS); set(lx, y, lz - 1, B.STONE_BRICKS); set(lx, y, lz + 1, B.STONE_BRICKS); }
+      set(lx, y, lz, B.LADDER, 3);
+    }
   }
 
   // ----- gerador v1/v2 (inalterado) -----

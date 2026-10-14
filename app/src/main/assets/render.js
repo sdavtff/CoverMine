@@ -18,7 +18,7 @@ export const R = {
   reflRT: null, maxAniso: 1, halfFloatRT: false, frameNo: 0,
   stats: { meshMain: 0, meshWorker: 0 },
 };
-const ATLAS_VERSION = 'atlas-v3.1';
+const ATLAS_VERSION = 'atlas-v3.4';
 
 // ---------------- inicialização ----------------
 export function initRenderer(canvas) {
@@ -212,7 +212,7 @@ export async function applyGraphics(key) {
     makeWaterMat();
   }
   if (all || prev.clouds !== eff.clouds) {
-    R.clouds.visible = eff.clouds > 0;
+    R.clouds.visible = eff.clouds > 0 && !(G.world && G.world.dim && G.world.dim !== 'overworld');
     if (eff.clouds > 0) { const old = R.cloudMat; R.cloudMat = makeCloudMaterial(eff.clouds); R.clouds.material = R.cloudMat; old.dispose(); }
   }
   if (!all && prev.veg !== eff.veg) rebuildAllChunks();
@@ -458,7 +458,44 @@ export function updateSky(weather = { rain: 0, storm: 0, flash: 0 }, under = 0) 
   R.sky.position.copy(G.camera.position);
   R.clouds.position.set(G.camera.position.x, 112 + (G.world ? G.world.sea - 22 : 0), G.camera.position.z);
   U.uCloudBase.value = R.clouds.position.y;
+  const dim = G.world && G.world.dim !== 'overworld' ? G.world.dim : null;
+  if (dim) dimensionSky(dim, eff, settings, rdBlocks);
+  else if (R.dimClouds) { R.dimClouds = false; R.clouds.visible = eff.clouds > 0; }
   return qa;
+}
+// Nether: névoa vermelha densa, sem sol nem céu, luz ambiente quente mínima.
+// End: céu escuro arroxeado com estrelas paradas, sem sol, luz ambiente fria.
+let dimProbeT = 0;
+function dimensionSky(dim, eff, settings, rdBlocks) {
+  const neth = dim === 'nether';
+  R.sky01 = { day: 0, night: 0, sunY: -1 };
+  U.uNight.value = neth ? 0 : 1;
+  U.uStarRot.value = 0.4;
+  if (neth) { U.uZenith.value.setRGB(0.16, 0.035, 0.025); U.uHorizon.value.setRGB(0.3, 0.07, 0.04); }
+  else { U.uZenith.value.setRGB(0.02, 0.012, 0.035); U.uHorizon.value.setRGB(0.09, 0.06, 0.12); }
+  U.uSunGlow.value.setRGB(0, 0, 0); U.uSunDisc.value.setRGB(0, 0, 0);
+  R.sun.intensity = 0; U.uLightCol.value.setRGB(0, 0, 0);
+  const L = settings.light;
+  if (neth) { R.hemi.color.setRGB(1, 0.45, 0.32); R.hemi.groundColor.setRGB(0.6, 0.2, 0.1); }
+  else { R.hemi.color.setRGB(0.62, 0.55, 0.8); R.hemi.groundColor.setRGB(0.4, 0.38, 0.3); }
+  const ambI = (neth ? 2.2 : 1.9) * L;
+  U.uAmbient.value.copy(R.hemi.color).multiplyScalar(ambI * 0.5);
+  if (--dimProbeT <= 0) {
+    dimProbeT = 30;
+    _c2.setRGB(0, 0, 0);
+    if (neth) { _zn.setRGB(0.62, 0.3, 0.22); _hz.setRGB(0.62, 0.26, 0.16); } else { _zn.setRGB(0.42, 0.36, 0.62); _hz.setRGB(0.5, 0.44, 0.6); }
+    updateProbe(_zn, _hz, _c2, lightDir, ambI, 0.6);
+  }
+  U.uMinLight.value = neth ? 0.34 : 0.2;
+  G.renderer.toneMappingExposure = 0.95 * (neth ? 1.15 : 1.35) * (settings.exposure || 1);
+  const fogEnd = neth ? Math.min(rdBlocks, 80) : rdBlocks;
+  U.uFogEnd.value = fogEnd;
+  U.uFogStart.value = neth ? 2 : rdBlocks * 0.35;
+  U.uFogDensity.value = neth ? 2.2 / fogEnd * (settings.fogDensity || 1) : 0.5 / rdBlocks;
+  U.uFogValley.value = 0;
+  U.uWet.value = 0; U.uSnowCover.value = 0; U.uFlash.value = 0;
+  if (!R.dimClouds) { R.dimClouds = true; R.clouds.visible = false; }
+  U.uCloudCover.value = 2;
 }
 
 let probeT = 0, physKey = -1;

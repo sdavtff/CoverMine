@@ -200,3 +200,16 @@ body.photo #hud, body.bench #hud > *:not(#info) { display: none !important; }
 /* aviso de nova versão */
 #update-banner { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 60; display: flex; gap: 10px; align-items: center; padding: 8px 12px; border-radius: 8px; background: rgba(20,40,20,0.92); border: 1px solid #5c5; color: #fff; font-size: calc(14px * var(--ui)); max-width: calc(100vw - 32px); flex-wrap: wrap; justify-content: center; }
 #update-banner.hidden { display: none; }
+/* fim de jogo: barra do chefe, brilho do portal, créditos */
+#boss-bar { display: none; position: fixed; top: 44px; left: 50%; transform: translateX(-50%); width: min(420px, calc(100vw - 32px)); z-index: 5; pointer-events: none; text-align: center; }
+#boss-bar .boss-name { font-size: calc(14px * var(--ui)); color: #f0d0ff; text-shadow: 0 1px 2px #000; margin-bottom: 3px; }
+#boss-bar .boss-track { height: 9px; border-radius: 5px; background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.25); overflow: hidden; }
+#boss-bar .boss-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #b03ad8, #f070ff); transition: width .2s; }
+#portal-overlay { position: fixed; inset: 0; pointer-events: none; opacity: 0; z-index: 4; background: radial-gradient(ellipse at center, rgba(160,60,255,0.25) 0%, rgba(110,20,200,0.85) 100%); }
+#credits { position: fixed; inset: 0; z-index: 80; background: radial-gradient(ellipse at center, #1a0f2a 0%, #05030a 100%); color: #f4ecff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 16px; overflow: hidden; }
+#credits .credits-roll { max-width: 560px; width: 100%; max-height: 72vh; overflow-y: auto; text-align: center; animation: credits-in 2.5s ease-out; }
+#credits h1 { font-size: calc(26px * var(--ui)); margin: 0 0 10px; color: #ffd86a; }
+#credits h2 { font-size: calc(18px * var(--ui)); margin: 22px 0 8px; color: #d9a6ff; }
+#credits p { margin: 5px 0; font-size: calc(14px * var(--ui)); opacity: .92; }
+#credits p.big { font-size: calc(16px * var(--ui)); opacity: 1; }
+@keyframes credits-in { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: none; } }

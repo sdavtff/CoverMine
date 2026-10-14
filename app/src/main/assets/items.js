@@ -11,6 +11,7 @@ for (let id = 1; id < BLOCK_COUNT; id++) {
   add(d.key, { name: d.name, block: id, fuel: d.fuel });
 }
 ITEMS.bedrock.creativeOnly = true;
+ITEMS.end_frame.creativeOnly = true;
 
 // ---- ferramentas ----
 export const TIERS = {
@@ -101,6 +102,13 @@ mat('boat', 'Barco', { shape: 'boat' }, { stack: 1, vehicle: 'boat', fuel: 20 })
 mat('minecart', 'Carrinho', { shape: 'minecart' }, { stack: 1, vehicle: 'minecart' });
 mat('saddle', 'Sela', { shape: 'saddle' }, { stack: 1 });
 mat('map', 'Mapa', { shape: 'map' }, { stack: 1 });
+// ---- Nether e End ----
+mat('quartz', 'Quartzo do Nether', { shape: 'gem', color: [236, 230, 222] });
+mat('glowstone_dust', 'Pó luminoso', { shape: 'dust', color: [250, 210, 90] });
+mat('blaze_rod', 'Vara de blaze', { shape: 'rod', color: [250, 180, 40] }, { fuel: 120 });
+mat('blaze_powder', 'Pó de blaze', { shape: 'dust', color: [250, 150, 30] });
+mat('ender_pearl', 'Pérola do ender', { shape: 'pearl', color: [30, 110, 100] }, { stack: 16, use: 'pearl' });
+mat('eye_of_ender', 'Olho do ender', { shape: 'eye', color: [60, 170, 110] }, { use: 'eye' });
 
 // itens que colocam blocos diferentes do próprio nome
 ITEMS.door.icon = { shape: 'door' };
@@ -138,6 +146,8 @@ export function blockDrops(id, meta, toolDef, rnd = Math.random) {
     case 'raw_iron': case 'raw_copper': case 'raw_gold': case 'coal': case 'diamond':
       return [[drop, drop === 'raw_copper' ? 2 + Math.floor(rnd() * 3) : 1]];
     case 'crystal': return [['crystal', 2 + Math.floor(rnd() * 3)]];
+    case 'glowstone_dust': return [['glowstone_dust', 2 + Math.floor(rnd() * 3)]];
+    case 'quartz': return [['quartz', 1 + (rnd() < 0.3 ? 1 : 0)]];
   }
   return ITEMS[drop] ? [[drop, 1]] : [];
 }

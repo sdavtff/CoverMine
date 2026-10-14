@@ -67,6 +67,11 @@ shaped(['PP', 'PP'], { P: '#planks' }, ['crafting_table', 1]);
 shaped(['C', 'S'], { C: 'coal', S: 'stick' }, ['torch', 4]);
 // fogo e explosivos
 shapeless(['iron_ingot', 'flint'], ['flint_and_steel', 1]);
+// Nether e End
+shapeless(['blaze_rod'], ['blaze_powder', 2]);
+shapeless(['ender_pearl', 'blaze_powder'], ['eye_of_ender', 1]);
+shaped(['GG', 'GG'], { G: 'glowstone_dust' }, ['glowstone', 1]);
+shaped(['QQ', 'QQ'], { Q: 'quartz' }, ['nether_brick', 2]);
 shaped(['SCS', 'CSC', 'SCS'], { S: 'sand', C: 'coal' }, ['tnt', 1]);
 shaped(['PPP', 'P P', 'PPP'], { P: '#planks' }, ['chest', 1], { big: true });
 shaped(['CCC', 'C C', 'CCC'], { C: 'cobble' }, ['furnace', 1], { big: true });

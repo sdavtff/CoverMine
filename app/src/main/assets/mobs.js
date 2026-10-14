@@ -67,6 +67,56 @@ const fishDef = (() => {
   return { tw: 32, th, parts };
 })();
 const humanoidDef = { tw: 64, th: 64, parts: HUMANOID.parts.map((p) => Object.assign({}, p)) };
+// ---- Nether e End ----
+// enderman: humanoide alto e magro (braços e pernas longos)
+const endermanDef = (() => {
+  const parts = [
+    { name: 'head', size: [8, 8, 8], pivot: [0, 38, 0], from: [-4, 0, -4], anim: 'head' },
+    { name: 'body', size: [8, 12, 4], pivot: [0, 26, 0], from: [-4, 0, -2] },
+    { name: 'armL', size: [2, 26, 2], pivot: [5, 37, 0], from: [-1, -26, -1], anim: 'armL' },
+    { name: 'armR', size: [2, 26, 2], pivot: [-5, 37, 0], from: [-1, -26, -1], anim: 'armR' },
+    { name: 'legL', size: [2, 26, 2], pivot: [2, 26, 0], from: [-1, -26, -1], anim: 'legL' },
+    { name: 'legR', size: [2, 26, 2], pivot: [-2, 26, 0], from: [-1, -26, -1], anim: 'legR' },
+  ];
+  const th = pack(parts, 64);
+  return { tw: 64, th, parts };
+})();
+// blaze: cabeça flutuando sobre varas que giram (as varas usam as animações de braços/pernas)
+const blazeDef = (() => {
+  const parts = [{ name: 'head', size: [8, 8, 8], pivot: [0, 18, 0], from: [-4, 0, -4], anim: 'head' }];
+  for (let i = 0; i < 6; i++) {
+    const a = i / 6 * Math.PI * 2, r = i % 2 ? 5 : 7;
+    parts.push({ name: 'rod' + i, size: [2, 8, 2], pivot: [Math.cos(a) * r, i % 2 ? 6 : 12, Math.sin(a) * r], from: [-1, -4, -1], anim: i % 2 ? 'legL' : 'armL' });
+  }
+  const th = pack(parts, 64);
+  return { tw: 64, th, parts };
+})();
+// dragão do End (desenhado em escala 2,6×)
+const dragonDef = (() => {
+  const parts = [
+    { name: 'body', size: [20, 14, 36], pivot: [0, 22, 0], from: [-10, -7, -18] },
+    { name: 'neck', size: [8, 8, 18], pivot: [0, 24, 16], from: [-4, -4, 0], anim: 'head' },
+    { name: 'head', size: [12, 10, 16], pivot: [0, 24, 16], from: [-6, -4, 16], anim: 'head' },
+    { name: 'wingL', size: [36, 2, 24], pivot: [10, 27, 4], from: [0, -1, -12], anim: 'wingL' },
+    { name: 'wingR', size: [36, 2, 24], pivot: [-10, 27, 4], from: [-36, -1, -12], anim: 'wingR' },
+    { name: 'tail', size: [6, 6, 36], pivot: [0, 22, -18], from: [-3, -3, -36], anim: 'tail' },
+    { name: 'legFL', size: [4, 10, 4], pivot: [7, 16, 10], from: [-2, -10, -2] },
+    { name: 'legFR', size: [4, 10, 4], pivot: [-7, 16, 10], from: [-2, -10, -2] },
+    { name: 'legBL', size: [4, 10, 4], pivot: [7, 16, -12], from: [-2, -10, -2] },
+    { name: 'legBR', size: [4, 10, 4], pivot: [-7, 16, -12], from: [-2, -10, -2] },
+  ];
+  const th = pack(parts, 128);
+  return { tw: 128, th, parts };
+})();
+const crystalDef = (() => {
+  const parts = [
+    { name: 'base', size: [12, 3, 12], pivot: [0, 0, 0], from: [-6, 0, -6] },
+    { name: 'head', size: [8, 8, 8], pivot: [0, 14, 0], from: [-4, -4, -4], anim: 'head' },
+    { name: 'body', size: [12, 12, 12], pivot: [0, 14, 0], from: [-6, -6, -6], anim: 'tail' },
+  ];
+  const th = pack(parts, 64);
+  return { tw: 64, th, parts };
+})();
 const villagerDef = { tw: 64, th: 64, parts: [...HUMANOID.parts.map((p) => Object.assign({}, p)), { name: 'nose', size: [2, 4, 2], uv: [24, 0], pivot: [0, 24, 0], from: [-1, 0, 4], anim: 'head' }] };
 
 // ---------------- texturas ----------------
@@ -142,5 +192,10 @@ export const MOBS = {
   fish: { name: 'Peixe', hp: 3, speed: 1.5, hw: 0.2, hh: 0.3, def: fishDef, variants: ['orange', 'blue'], tex: (v) => drawParts(fishDef, (ctx, p, n) => { for (const k in n) fillNet(ctx, n[k], v === 'orange' ? [240, 140, 40] : [70, 120, 200], 2); }), drops: [['fish', 1, 1]], passive: true, aquatic: true },
   zombie: { name: 'Zumbi', hp: 20, speed: 1.6, hw: 0.3, hh: 1.8, def: humanoidDef, tex: () => humanTexture({ def: humanoidDef, skin: [90, 140, 80], shirt: [50, 130, 160], pants: [60, 60, 140], hair: [40, 70, 40], eyes: [20, 20, 20], mouth: [40, 60, 40], sleeve: [50, 130, 160] }), drops: [['rotten_flesh', 0, 2], ['iron_ingot', 0, 0.06]], hostile: true, attack: 3, burns: true, sound: 'groan', zombie: true },
   skeleton: { name: 'Esqueleto', hp: 20, speed: 1.4, hw: 0.3, hh: 1.8, def: humanoidDef, tex: () => humanTexture({ def: humanoidDef, skin: [200, 200, 196], shirt: [190, 190, 186], pants: [180, 180, 176], hair: [200, 200, 196], eyes: [30, 30, 30], mouth: [60, 60, 60], ribs: true }), drops: [['bone', 0, 2], ['arrow', 0, 2]], hostile: true, attack: 2, ranged: true, burns: true, sound: 'rattle' },
+  // ---- Nether e End ----
+  blaze: { name: 'Blaze', hp: 20, speed: 1.2, hw: 0.35, hh: 1.6, def: blazeDef, tex: () => drawParts(blazeDef, (ctx, p, n) => { for (const k in n) fillNet(ctx, n[k], p.name === 'head' ? [240, 190, 60] : [250, 150, 30], 4); if (p.name === 'head') { const [x, y, w, h] = n.front; dot(ctx, x + 1, y + 3, [40, 20, 0], 2, 1); dot(ctx, x + w - 3, y + 3, [40, 20, 0], 2, 1); dot(ctx, x + 2, y + h - 2, [120, 50, 0], w - 4, 1); } }), drops: [['blaze_rod', 1, 1]], hostile: true, flies: true, fireImmune: true, attack: 5, sound: 'groan', glow: 1.4 },
+  enderman: { name: 'Enderman', hp: 40, speed: 1.9, hw: 0.3, hh: 2.9, def: endermanDef, tex: () => drawParts(endermanDef, (ctx, p, n) => { for (const k in n) fillNet(ctx, n[k], [22, 20, 26], 6); if (p.name === 'head') { const [x, y] = n.front; dot(ctx, x, y + 4, [200, 80, 250], 3, 1); dot(ctx, x + 5, y + 4, [200, 80, 250], 3, 1); dot(ctx, x + 1, y + 4, [250, 180, 255]); dot(ctx, x + 6, y + 4, [250, 180, 255]); } }), drops: [['ender_pearl', 1, 1]], neutral: true, attack: 6, teleports: true, sound: 'groan' },
+  dragon: { name: 'Dragão do End', hp: 200, speed: 3, hw: 2.6, hh: 5, scale: 2.6, def: dragonDef, tex: () => drawParts(dragonDef, (ctx, p, n) => { const c = p.name.startsWith('wing') ? [44, 40, 52] : [30, 28, 34]; for (const k in n) fillNet(ctx, n[k], c, 8); if (p.name === 'head') { const [x, y, w] = n.front; dot(ctx, x + 1, y + 2, [220, 90, 255], 3, 2); dot(ctx, x + w - 4, y + 2, [220, 90, 255], 3, 2); } if (p.name === 'body' || p.name === 'tail') { const [x, y, w] = n.top; for (let i = 1; i < n.top[3]; i += 4) dot(ctx, x + Math.floor(w / 2) - 1, y + i, [90, 86, 100], 2, 2); } }), drops: [], boss: true, onDeath: 'dragonKilled', glow: 1.1 },
+  crystal: { name: 'Cristal do End', hp: 1, speed: 0, hw: 0.9, hh: 2, def: crystalDef, tex: () => drawParts(crystalDef, (ctx, p, n) => { for (const k in n) fillNet(ctx, n[k], p.name === 'base' ? [40, 40, 44] : p.name === 'head' ? [255, 120, 220] : [200, 170, 255], 3); }), drops: [], boss: true, onDeath: 'crystalKilled', glow: 2.2, noCorpse: true },
   villager: { name: 'Aldeão', hp: 20, speed: 1.0, hw: 0.3, hh: 1.9, def: villagerDef, variants: PROFESSION_LIST, tex: (v) => humanTexture({ def: villagerDef, skin: [190, 140, 110], shirt: PROFESSIONS[v].shirt, pants: PROFESSIONS[v].shirt, hair: [70, 50, 40], eyes: [40, 120, 60], robe: true, sleeve: PROFESSIONS[v].shirt, apron: PROFESSIONS[v].apron }), drops: [], npc: true },
 };

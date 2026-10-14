@@ -185,6 +185,8 @@ export function secondaryAction() {
   const h = GP.target;
   // isqueiro: acende TNT ou põe fogo na face apontada
   if (item && item.tool && item.tool.kind === 'igniter' && h) {
+    // dentro de uma moldura de obsidiana: acende o portal do Nether
+    if (hook('lightPortal', h.x + h.face[0], h.y + h.face[1], h.z + h.face[2])) { damageHeld(1); pl.swing = 1; return; }
     const ok = w.getBlock(h.x, h.y, h.z) === B.TNT ? ignite(h.x, h.y, h.z) : ignite(h.x + h.face[0], h.y + h.face[1], h.z + h.face[2]);
     if (ok) { damageHeld(1); hook('sound', 'ignite', { x: h.x + 0.5, y: h.y + 0.5, z: h.z + 0.5 }); pl.swing = 1; }
     return;
@@ -195,6 +197,8 @@ export function secondaryAction() {
     if (d && d.use && useBlock(h.x, h.y, h.z, h.id, h.meta, d.use)) { pl.swing = 1; return; }
   }
   if (!item) return;
+  // olho do ender (aponta a Fortaleza) e pérola do ender (teletransporte)
+  if (item.use && hook('useItem', item.use, h)) return;
   // comida
   if (item.food) { if (pl.eat(item)) { consumeHeld(); hook('sound', 'eat'); hook('particles', pl.pos.x - 0.5, pl.pos.y + 1, pl.pos.z - 0.5, B.WHEAT); pl.swing = 1; } return; }
   // baldes
@@ -320,6 +324,7 @@ function useBlock(x, y, z, id, meta, use) {
   const w = G.world;
   switch (use) {
     case 'craft': hook('openScreen', 'craft', { x, y, z }); return true;
+    case 'endframe': return !!hook('useEndFrame', x, y, z);
     case 'furnace': hook('openScreen', 'furnace', { x, y, z, data: furnaceData(x, y, z) }); return true;
     case 'chest': hook('openScreen', 'chest', { x, y, z, data: chestData(x, y, z, meta) }); hook('sound', 'chest'); return true;
     case 'door': {

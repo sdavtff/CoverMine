@@ -52,11 +52,11 @@ function flowTick(x, y, z) {
   const F = FLUID[id];
   if (!F) return;
   let m = w.getMeta(x, y, z);
-  // lava encostando em água: fonte vira pedra; corrente vira pedregulho
+  // lava encostando em água: fonte vira obsidiana; corrente vira pedregulho
   if (id === B.LAVA) {
     for (const [dx, dy, dz] of [[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0]]) {
       if (w.getBlock(x + dx, y + dy, z + dz) === B.WATER) {
-        set(x, y, z, m === 0 ? B.STONE : B.COBBLE, 0);
+        set(x, y, z, m === 0 ? B.OBSIDIAN : B.COBBLE, 0);
         PT.smoke(x + 0.5, y + 1, z + 0.5, 8, [0.8, 0.8, 0.8]); hook('sound', 'fizz', { x: x + 0.5, y: y + 0.5, z: z + 0.5 });
         return;
       }
@@ -92,7 +92,7 @@ function flowTick(x, y, z) {
     return;
   }
   if (below === B.WATER && id === B.LAVA) { set(x, y - 1, z, B.STONE, 0); return; }
-  if (below === B.LAVA && id === B.WATER) { set(x, y - 1, z, w.getMeta(x, y - 1, z) === 0 ? B.STONE : B.COBBLE, 0); return; }
+  if (below === B.LAVA && id === B.WATER) { set(x, y - 1, z, w.getMeta(x, y - 1, z) === 0 ? B.OBSIDIAN : B.COBBLE, 0); return; }
   if (below === id) return; // cai num lago: não espalha
   const lvl = m & 8 ? 0 : m & 7;
   const nl = lvl + F.step;

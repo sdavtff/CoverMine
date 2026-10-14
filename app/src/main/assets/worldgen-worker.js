@@ -1,5 +1,6 @@
 // Web Worker: gera chunks e constrói malhas fora do thread principal.
 import { WorldGen } from './worldgen.js';
+import { makeDimGen } from './dimgen.js';
 import { meshChunk } from './mesher.js';
 
 let gen = null, seed = 0, uv = null;
@@ -12,7 +13,7 @@ const fake = {
 };
 self.onmessage = (e) => {
   const m = e.data;
-  if (m.type === 'init') { seed = m.seed; gen = new WorldGen(m.seed, m.gen); return; }
+  if (m.type === 'init') { seed = m.seed; gen = makeDimGen(m.seed, m.gen) || new WorldGen(m.seed, m.gen); return; }
   if (m.type === 'uv') { uv = m.uv; return; }
   if (m.type === 'gen' && gen) {
     const r = gen.generate(m.cx, m.cz);

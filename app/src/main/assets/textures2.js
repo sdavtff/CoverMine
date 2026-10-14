@@ -4,6 +4,7 @@ import { TILE as T } from './tiles.js';
 
 export const EXTRA_ROUGH = {
   [T.LAVA]: 0.6, [T.ICE]: 0.08, [T.IRON_BLOCK]: 0.35, [T.GOLD_BLOCK]: 0.25, [T.DIAMOND_BLOCK]: 0.2, [T.COPPER_BLOCK]: 0.35,
+  [T.OBSIDIAN]: 0.15, [T.GLOWSTONE]: 0.5, [T.END_PORTAL]: 0.2, [T.NETHER_PORTAL]: 0.2, [T.DRAGON_EGG]: 0.3,
   [T.CRYSTAL_BLOCK]: 0.15, [T.CRYSTAL_ORE]: 0.5, [T.DIAMOND_ORE]: 0.6, [T.GOLD_ORE]: 0.6, [T.MUD]: 0.5, [T.PLAMP_ON]: 0.3,
   [T.PLAMP_OFF]: 0.3, [T.ELEVATOR]: 0.4, [T.RAIL]: 0.5, [T.RAIL_CURVE]: 0.5, [T.WOOL_WHITE]: 1, [T.WOOL_BLACK]: 1,
   [T.WOOL_BROWN]: 1, [T.WOOL_GRAY]: 1, [T.COLOR_RED]: 0.7, [T.COLOR_BLUE]: 0.7, [T.COLOR_YELLOW]: 0.7, [T.COLOR_GREEN]: 0.7,
@@ -424,6 +425,96 @@ export function EXTRA_GEN(h) {
       if (!strand && !leaf) return [80, 120, 50, 0, 0];
       const c = mulc([150, 150, 150], 0.75 + ihash(px, py, 602) * 0.3);
       return [c[0], c[1], c[2], 1, leaf ? 0.8 : 0.5];
+    },
+    // ---------------- Nether e End ----------------
+    // obsidiana: vidro vulcânico quase preto com reflexos roxos
+    [T.OBSIDIAN]: (u, v, px, py) => {
+      const n = fbm(u, v, 4, 4, 4, 611), [d1, d2] = worley(u, v, 5, 612, 0.9);
+      const edge = smooth(0.0, 0.08, d2 - d1);
+      let c = mixc([14, 10, 24], [52, 30, 80], n * 0.7 + (1 - edge) * 0.4);
+      if (ihash(px, py, 613) > 0.97) c = [110, 80, 160];
+      return [c[0], c[1], c[2], 1, 0.4 + edge * 0.5];
+    },
+    // netherrack: rocha vermelha porosa
+    [T.NETHERRACK]: (u, v, px, py) => {
+      const n = fbm(u, v, 4, 4, 5, 621), g = ihash(px, py, 622);
+      const [d1] = worley(u, v, 7, 623, 1);
+      let c = mixc([90, 30, 30], [150, 58, 52], n * 0.8 + g * 0.25);
+      if (d1 < 0.16) c = mulc(c, 0.6);
+      return [c[0], c[1], c[2], 1, d1 < 0.16 ? 0.2 : 0.5 + n * 0.4];
+    },
+    // areia das almas: marrom escura com "rostos"
+    [T.SOUL_SAND]: (u, v, px, py) => {
+      const n = fbm(u, v, 4, 4, 4, 631), g = ihash(px, py, 632);
+      let c = mixc([62, 46, 36], [104, 80, 62], n * 0.7 + g * 0.3);
+      const [d1, , id] = worley(u, v, 3, 633, 0.7);
+      if (d1 < 0.2) { const fx = (u * 3) % 1, fy = (v * 3) % 1; if ((Math.abs(fx - 0.38) < 0.08 || Math.abs(fx - 0.62) < 0.08) && Math.abs(fy - 0.4) < 0.08 || Math.abs(fy - 0.65) < 0.05 && Math.abs(fx - 0.5) < 0.15) c = mulc(c, 0.45 + ihash(id, 1, 634) * 0.1); }
+      return [c[0], c[1], c[2], 1, 0.3 + n * 0.5];
+    },
+    // pedra luminosa: cristais amarelos brilhantes
+    [T.GLOWSTONE]: (u, v, px, py) => {
+      const [d1, d2] = worley(u, v, 6, 641, 1);
+      const k = smooth(0.0, 0.25, d2 - d1);
+      const c = mixc([170, 110, 40], [255, 236, 160], k * 0.8 + ihash(px, py, 642) * 0.2);
+      return [c[0], c[1], c[2], 1, k];
+    },
+    // tijolo do Nether: tijolos pequenos roxo-escuros
+    [T.NETHER_BRICK]: (u, v, px, py) => {
+      const row = Math.floor(v * 4), rv = v * 4 - row, off = row % 2 ? 0.25 : 0, bu = ((u + off) * 2) % 1;
+      const g = ihash(px, py, 651), n = fbm(u, v, 4, 4, 3, 652);
+      if (rv < 0.12 || bu < 0.06) { const c = mulc([30, 14, 18], 0.9 + g * 0.2); return [c[0], c[1], c[2], 1, 0.1]; }
+      const c = mixc([54, 24, 30], [86, 40, 46], n * 0.7 + g * 0.3);
+      return [c[0], c[1], c[2], 1, 0.6 + n * 0.3];
+    },
+    // minério de quartzo: netherrack com cristais brancos
+    [T.QUARTZ_ORE]: (u, v, px, py) => {
+      const base = GEN[T.NETHERRACK](u, v, px, py);
+      const [d1, , id] = worley(u, v, 4, 661, 0.9), [e1] = worley(u, v, 12, 662, 1);
+      if (d1 < 0.26 && e1 < 0.5 && ihash(id, 2, 661) < 0.85) { const c = mixc([200, 190, 180], [250, 248, 240], 1 - e1 / 0.5); return [c[0], c[1], c[2], 1, 0.9]; }
+      return base;
+    },
+    // portal do Nether: redemoinho roxo translúcido
+    [T.NETHER_PORTAL]: (u, v, px, py) => {
+      const a = Math.atan2(v - 0.5, u - 0.5), r = Math.hypot(u - 0.5, v - 0.5);
+      const sw = 0.5 + 0.5 * Math.sin(a * 3 + r * 22 + fbm(u, v, 4, 4, 3, 671) * 6);
+      const c = mixc([90, 20, 170], [200, 120, 255], sw);
+      return [c[0], c[1], c[2], sw > 0.25 || ihash(px, py, 672) > 0.6 ? 1 : 0, sw];
+    },
+    // pedra do End: amarelo-claro com pontos
+    [T.END_STONE]: (u, v, px, py) => {
+      const n = fbm(u, v, 4, 4, 4, 681), g = ihash(px, py, 682), [d1] = worley(u, v, 9, 683, 1);
+      let c = mixc([200, 196, 140], [234, 232, 176], n * 0.7 + g * 0.3);
+      if (d1 < 0.12) c = mulc(c, 0.78);
+      return [c[0], c[1], c[2], 1, d1 < 0.12 ? 0.25 : 0.5 + n * 0.3];
+    },
+    // moldura do portal do End: topo verde-azulado com encaixe; lateral de pedra do End com faixa
+    [T.END_FRAME_TOP]: (u, v, px, py) => {
+      const d = Math.max(Math.abs(u - 0.5), Math.abs(v - 0.5));
+      if (d < 0.22) { const c = mulc([30, 60, 50], 0.8 + ihash(px, py, 691) * 0.3); return [c[0], c[1], c[2], 1, 0.2]; }
+      const c = mixc([50, 110, 90], [90, 160, 130], fbm(u, v, 4, 4, 3, 692));
+      return [c[0], c[1], c[2], 1, d > 0.44 ? 0.4 : 0.8];
+    },
+    [T.END_FRAME_SIDE]: (u, v, px, py) => {
+      if (v < 0.25) { const c = mixc([50, 110, 90], [90, 160, 130], fbm(u, v, 4, 4, 3, 693)); return [c[0], c[1], c[2], 1, 0.8]; }
+      return GEN[T.END_STONE](u, v, px, py);
+    },
+    [T.END_FRAME_EYE]: (u, v, px, py) => {
+      const d = Math.hypot(u - 0.5, v - 0.5);
+      if (d < 0.2) { const pupil = d < 0.08; const c = pupil ? [20, 40, 30] : mixc([40, 160, 110], [150, 240, 180], 1 - d / 0.2); return [c[0], c[1], c[2], 1, 1]; }
+      return GEN[T.END_FRAME_TOP](u, v, px, py);
+    },
+    // portal do End: céu estrelado escuro
+    [T.END_PORTAL]: (u, v, px, py) => {
+      const g = ihash(px, py, 701), n = fbm(u, v, 3, 3, 3, 702);
+      let c = mixc([4, 8, 14], [16, 30, 40], n);
+      if (g > 0.965) c = mixc([120, 200, 190], [240, 255, 250], ihash(px, py, 703));
+      return [c[0], c[1], c[2], 1, 0.5];
+    },
+    // ovo do dragão: preto com pintas roxas
+    [T.DRAGON_EGG]: (u, v, px, py) => {
+      const [d1] = worley(u, v, 6, 711, 1);
+      const c = d1 < 0.2 ? mixc([90, 30, 110], [150, 60, 180], ihash(px, py, 712)) : mixc([10, 6, 14], [30, 20, 36], fbm(u, v, 4, 4, 3, 713));
+      return [c[0], c[1], c[2], 1, d1 < 0.2 ? 0.8 : 0.5];
     },
   };
 }

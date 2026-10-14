@@ -188,6 +188,10 @@ export function playSound(name, a, b) {
     case 'arrow_hit': noise(0.08, 900, 3, 0.4); break;
     case 'hit': noise(0.1, 600, 2, 0.4); break;
     case 'elevator': tone(400, 900, 0.25, 0.12, 'sine'); break;
+    case 'portal': tone(110, 480, 1.8, 0.07, 'sine'); tone(165, 700, 1.8, 0.04, 'triangle'); noise(1.8, 500, 1.5, 0.18, 'bandpass', 0.6); break;
+    case 'portal_open': [392, 523, 659, 784, 1046].forEach((f, i) => tone(f, f * 1.01, 0.4, 0.09, 'triangle', i * 0.12)); break;
+    case 'roar': noise(1.5, 140, 1.2, 0.7, 'lowpass', 0.12); tone(95, 55, 1.4, 0.16, 'sawtooth'); break;
+    case 'eye': tone(700, 1400, 0.35, 0.06, 'sine'); break;
     case 'shear': noise(0.12, 4000, 3, 0.3); noise(0.12, 4000, 3, 0.3, 'bandpass', 0.005, 0.12); break;
     case 'explode': noise(1.6, 90, 0.5, 1.0, 'lowpass', 0.005); noise(0.6, 600, 0.6, 0.6, 'lowpass', 0.003); noise(2.2, 45, 0.4, 0.7, 'lowpass', 0.05, 0.05); break;
     case 'fuse': noise(1.2, 3500, 2, 0.15, 'bandpass', 0.02); break;

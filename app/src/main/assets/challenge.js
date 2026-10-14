@@ -20,6 +20,14 @@ export const OBJECTIVES = [
   { id: 'dpick', text: 'Fabrique uma picareta de diamante', ev: 'craft', match: (k) => k === 'diamond_pickaxe', n: 1, reward: ['crystal_block', 2] },
   { id: 'quest', text: 'Conclua uma missão de aldeão', ev: 'quest', match: () => true, n: 1, reward: ['coin', 10] },
   { id: 'circuit', text: 'Acenda uma lâmpada elétrica com uma alavanca', ev: 'place', match: (k) => k === B.PLAMP_ON, n: 1, reward: ['wire', 16] },
+  // fim de jogo: Nether, Fortaleza e End
+  { id: 'obsidian', text: 'Consiga 10 obsidianas (água sobre lava parada)', ev: 'collect', match: (k) => k === 'obsidian', n: 10, reward: ['flint_and_steel', 1] },
+  { id: 'nether', text: 'Construa um portal e entre no Nether', ev: 'dimension', match: (k) => k === 'nether', n: 1, reward: ['cooked_beef', 8] },
+  { id: 'blaze', text: 'Consiga 6 varas de blaze (fortaleza do Nether)', ev: 'collect', match: (k) => k === 'blaze_rod', n: 6, reward: ['iron_chest', 1] },
+  { id: 'pearl', text: 'Consiga 12 pérolas do ender (endermen)', ev: 'collect', match: (k) => k === 'ender_pearl', n: 12, reward: ['arrow', 32] },
+  { id: 'eye', text: 'Fabrique 12 olhos do ender', ev: 'craft', match: (k) => k === 'eye_of_ender', n: 12, reward: ['bow', 1] },
+  { id: 'end', text: 'Siga os olhos até a Fortaleza e entre no End', ev: 'dimension', match: (k) => k === 'end', n: 1, reward: ['arrow', 32] },
+  { id: 'dragon', text: 'Derrote o Dragão do End', ev: 'kill', match: (k) => k === 'dragon', n: 1, reward: ['diamond_block', 3] },
 ];
 
 export const CH = { index: 0, progress: 0, done: false };

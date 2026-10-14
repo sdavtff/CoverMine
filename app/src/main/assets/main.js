@@ -32,6 +32,8 @@ import { askText, askChoice, showMessage } from './dialog.js';
 import { initAmbient, updateAmbient } from './ambient.js';
 import { updateWorldPhysics, explode, clearWorldPhysics, ignite } from './worldphys.js';
 import { initUpdates } from './update.js';
+import { GEN_NETHER, GEN_END } from './dimgen.js';
+import { END, endJSON, loadEnd, initEndgame, lightPortal, portalBlockChanged, useEndFrame, useItem, arrival, onEnterDim, bossAI, dragonKilled, crystalKilled, updateEndgame, resetEndgameVisuals } from './endgame.js';
 import { PHOTO, enterPhoto, exitPhoto, photoCamera, photoAfterRender, BENCH, startBenchmark, benchCamera, benchBegin, benchEnd, benchResult, benchText } from './tools.js';
 G.net = NET;
 
@@ -59,6 +61,7 @@ async function boot() {
   initHand();
   PT.initParticles(G.scene);
   initAmbient(G.scene);
+  initEndgame(G.scene);
   PT.setParticleDensity(G.eff.particles ?? 1);
   initWeather(G.scene);
   initEntities();
@@ -109,7 +112,7 @@ function wireHooks() {
   H.questEvent = (ev, k, n) => questEvent(ev, k, n);
   H.villageFound = (v) => { addPOI({ id: 'v' + v.id, name: 'Aldeia', x: v.x, z: v.z, color: '#6f6' }); toast('Você encontrou uma aldeia!'); challengeEvent('village', 1); };
   H.worldDirty = () => { G.world && (G.world.dirty = true); };
-  H.blockChanged = (x, y, z, o, n) => { MECH.onBlockChanged(x, y, z, o, n); updateExploredColumn(x, z); if (n === B.PLAMP_ON) challengeEvent('place', B.PLAMP_ON); };
+  H.blockChanged = (x, y, z, o, n) => { MECH.onBlockChanged(x, y, z, o, n); portalBlockChanged(x, y, z, o, n); updateExploredColumn(x, z); if (n === B.PLAMP_ON) challengeEvent('place', B.PLAMP_ON); };
   H.powerChanged = (x, y, z) => MECH.recompute(x, y, z);
   H.pushEntities = (x, y, z, dx, dy, dz) => { for (const e of [G.player, ...E.list]) if (e.pos && Math.floor(e.pos.x) === x && Math.floor(e.pos.z) === z && Math.abs(Math.floor(e.pos.y) - y) <= 1) { e.pos.x += dx; e.pos.y += dy + (dy > 0 ? 0.1 : 0); e.pos.z += dz; } };
   H.splash = (p) => { PT.splash(p.x, p.y + 0.5, p.z); playSound('splash'); };
@@ -141,6 +144,16 @@ function wireHooks() {
   H.ignite = (x, y, z) => ignite(x, y, z);
   H.runBenchmark = () => runBenchmark();
   H.photoMode = () => { resumeGame(); setTimeout(() => actions.photo(), 50); };
+  // Nether, End e o dragão
+  H.changeDimension = (dim, how) => changeDimension(dim, how);
+  H.lightPortal = (x, y, z) => lightPortal(x, y, z);
+  H.useEndFrame = (x, y, z) => useEndFrame(x, y, z);
+  H.useItem = (kind) => useItem(kind);
+  H.bossAI = (e, dt) => bossAI(e, dt);
+  H.dragonKilled = (e) => dragonKilled(e);
+  H.crystalKilled = (e) => crystalKilled(e);
+  H.creditsOpen = () => { G.playing = false; primaryUp(); if (document.pointerLockElement) document.exitPointerLock(); };
+  H.creditsClosed = () => { G.playing = true; last = performance.now(); if (!G.isTouch) canvas.requestPointerLock(); };
 }
 
 // ---------------- ações do jogador (entrada) ----------------
@@ -207,23 +220,37 @@ async function openWorld(meta) {
     showMessage('Não foi possível abrir o mundo: ' + e.message);
   }
 }
-export async function startWorld(meta, data, opts = {}) {
-  stopWorld();
-  current = { meta };
-  G.meta = meta;
-  G.mode = meta.mode || 'survival';
+// cria o World de uma dimensão a partir das edições guardadas ({ edits, blockData } já serializados)
+function makeWorld(meta, dim, st) {
   const edits = new Map();
-  if (data && data.edits) for (const k in data.edits) edits.set(k, new Map(data.edits[k]));
+  if (st && st.edits) for (const k in st.edits) edits.set(k, new Map(st.edits[k]));
   const blockData = new Map();
-  if (data && data.blockData) for (const [k, v] of data.blockData) blockData.set(k, reviveBlockData(v));
-  const w = new World({ seed: meta.seed, gen: meta.gen || 3, edits, blockData });
-  G.world = w;
+  if (st && st.blockData) for (const [k, v] of st.blockData) blockData.set(k, reviveBlockData(v));
+  const gen = dim === 'nether' ? GEN_NETHER : dim === 'end' ? GEN_END : (meta.gen || 3);
+  const w = new World({ seed: meta.seed, gen, edits, blockData });
   w.setUV(R.uv);
-  w.villageState = (data && data.villageState) || {};
   w.onMeshed = onWorkerMeshed;
   w.onEdit = (c, lx, y, lz) => onBlockEdited(c, lx, y, lz);
   const sp = w.gen.findSpawn();
   w.spawn = { x: sp[0], y: sp[1] + 1, z: sp[2] };
+  return w;
+}
+export async function startWorld(meta, data, opts = {}) {
+  stopWorld();
+  // dimensões: as edições do mundo normal ficam em data.edits (compatível com saves antigos); Nether e End em data.dims
+  const dim = data && data.dim && !meta.net ? data.dim : 'overworld';
+  current = {
+    meta, dim,
+    store: { overworld: { edits: data && data.edits, blockData: data && data.blockData }, nether: data && data.dims && data.dims.nether, end: data && data.dims && data.dims.end },
+    ow: { entities: data && data.entities, map: data && data.map, villageState: (data && data.villageState) || {} },
+  };
+  G.meta = meta;
+  G.mode = meta.mode || 'survival';
+  loadEnd(data && data.endgame);
+  resetEndgameVisuals();
+  const w = makeWorld(meta, dim, current.store[dim]);
+  G.world = w;
+  w.villageState = current.ow.villageState;
   const p = new Player();
   G.player = p;
   p.name = G.settings.name || 'Jogador';
@@ -233,12 +260,13 @@ export async function startWorld(meta, data, opts = {}) {
   if (!data || !data.player || data.player.inv === undefined) giveStarter(p, data);
   G.gameTime = data && data.time != null ? data.time : 0.3;
   G.day = data && data.day || 0;
-  loadEntities(data && data.entities);
+  loadEntities(dim === 'overworld' ? data && data.entities : null);
   loadWeather(data && data.weather);
-  loadMap(data && data.map);
+  loadMap(dim === 'overworld' ? data && data.map : null);
   loadChallenge(data && data.challenge);
   G.quests = (data && data.quests) || [];
-  addPOI({ id: 'spawn', name: 'Ponto inicial', x: w.spawn.x, z: w.spawn.z, color: '#fff' });
+  if (dim === 'overworld') addPOI({ id: 'spawn', name: 'Ponto inicial', x: w.spawn.x, z: w.spawn.z, color: '#fff' });
+  if (dim === 'end' && !END.dragonDead) onEnterDim('end');
   // carrega a vizinhança imediata (sincrono) para o jogador não cair
   const pcx = Math.floor(p.pos.x / 16), pcz = Math.floor(p.pos.z / 16);
   for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) w.getChunk(pcx + dx, pcz + dz);
@@ -299,10 +327,16 @@ async function saveNow() {
   if (!G.world || !current || saving || NET.isClient() || (current.meta && (current.meta.net || current.meta.bench))) return;
   saving = true;
   try {
+    const dim = current.dim || 'overworld';
+    const active = { edits: G.world.serializeEdits(), blockData: serializeBlockData(G.world) };
+    const st = Object.assign({}, current.store, { [dim]: active });
+    const ow = dim === 'overworld' ? { entities: serializeEntities(), map: mapJSON(), villageState: G.world.villageState } : current.ow;
     const data = {
-      player: G.player.toJSON(), edits: G.world.serializeEdits(), blockData: serializeBlockData(G.world), entities: serializeEntities(),
-      time: G.gameTime, day: G.day, weather: weatherJSON(), map: mapJSON(), challenge: challengeJSON(), quests: G.quests, villageState: G.world.villageState,
+      player: G.player.toJSON(), edits: (st.overworld && st.overworld.edits) || {}, blockData: (st.overworld && st.overworld.blockData) || [], entities: ow.entities || [],
+      time: G.gameTime, day: G.day, weather: weatherJSON(), map: ow.map || null, challenge: challengeJSON(), quests: G.quests, villageState: ow.villageState || {},
+      dim, dims: { nether: st.nether || null, end: st.end || null }, endgame: endJSON(),
     };
+    if (END.completed) current.meta.completed = true;
     await saveWorld(current.meta, data);
     G.world.dirty = false;
   } catch (e) { console.warn('falha ao salvar', e); toast('Não foi possível salvar o mundo (armazenamento cheio?).'); }
@@ -312,6 +346,7 @@ async function saveNow() {
 window.saveGame = () => { saveNow(); saveSettings(); };
 function stopWorld() {
   if (!G.world) return;
+  resetEndgameVisuals();
   exitPhoto();
   clearWorldPhysics();
   for (const c of G.world.chunks.values()) disposeChunkMeshes(c);
@@ -320,6 +355,50 @@ function stopWorld() {
   closeScreen(true);
   G.world = null; G.playing = false;
   setRain(0);
+}
+// ---------------- viagem entre dimensões ----------------
+let traveling = false;
+async function changeDimension(dim, how) {
+  if (!G.world || !current || traveling || G.world.dim === dim) return;
+  if (NET.connected || (current.meta && current.meta.net)) { toast('Viajar entre dimensões ainda não funciona no multiplayer.'); return; }
+  traveling = true;
+  const from = G.world.dim || 'overworld', p = G.player, fromPos = { x: p.pos.x, y: p.pos.y, z: p.pos.z };
+  setLoading(dim === 'nether' ? 'Entrando no Nether...' : dim === 'end' ? 'Entrando no End...' : 'Voltando ao mundo normal...');
+  playSound('portal');
+  await new Promise((r) => setTimeout(r, 30));
+  try {
+    // guarda a dimensão atual
+    current.store[from] = { edits: G.world.serializeEdits(), blockData: serializeBlockData(G.world) };
+    if (from === 'overworld') current.ow = { entities: serializeEntities(), map: mapJSON(), villageState: G.world.villageState };
+    clearWorldPhysics();
+    resetEndgameVisuals();
+    for (const c of G.world.chunks.values()) disposeChunkMeshes(c);
+    G.world.dispose();
+    clearEntities();
+    // monta a nova
+    const w = makeWorld(current.meta, dim, current.store[dim]);
+    G.world = w;
+    current.dim = dim;
+    w.villageState = dim === 'overworld' ? current.ow.villageState || {} : {};
+    if (dim === 'overworld') { loadEntities(current.ow.entities); loadMap(current.ow.map); addPOI({ id: 'spawn', name: 'Ponto inicial', x: w.spawn.x, z: w.spawn.z, color: '#fff' }); }
+    else loadMap(null);
+    const a = arrival(dim, from, fromPos, how);
+    p.vel.x = p.vel.y = p.vel.z = 0; p.fallStartY = null; p.riding = null; p.sitting = null;
+    if (a) { p.pos.x = a.x; p.pos.y = a.y; p.pos.z = a.z; if (a.yaw != null) p.yaw = a.yaw; }
+    else { const s = p.spawn || w.spawn; p.pos.x = s.x + 0.5; p.pos.y = s.y; p.pos.z = s.z + 0.5; }
+    const pcx = Math.floor(p.pos.x / 16), pcz = Math.floor(p.pos.z / 16);
+    for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) w.getChunk(pcx + dx, pcz + dz);
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) R.urgent.add(w.getChunk(pcx + dx, pcz + dz));
+    if (!a) spawnAt(p, { x: p.pos.x - 0.5, y: p.pos.y, z: p.pos.z - 0.5 });
+    p.invuln = 2;
+    R.needKey = ''; R.shadowDirty = true;
+    resetHistory();
+    if (dim !== 'overworld') onEnterDim(dim);
+    setRain(0);
+    await saveNow();
+  } catch (e) { console.error(e); toast('Erro ao trocar de dimensão: ' + e.message); }
+  setLoading('');
+  traveling = false;
 }
 async function quitToTitle() {
   await saveNow();
@@ -488,7 +567,7 @@ function onDeath(src) {
     MAP.pois = MAP.pois.filter((q) => q.id !== 'death' || q.x === p.pos.x);
   }
   if (document.pointerLockElement) document.exitPointerLock();
-  showDeath(src, () => { p.respawn(); if (!G.isTouch) canvas.requestPointerLock(); });
+  showDeath(src, async () => { if (G.world.dim !== 'overworld') await changeDimension('overworld', 'respawn'); p.respawn(); if (!G.isTouch) canvas.requestPointerLock(); });
 }
 function throwItemAt(pos, s) { const it = E.list && G.hooks.dropItem(pos.x, pos.y + 1, pos.z, s.k, s.n, s.d); if (it) { it.vel.x = (Math.random() - 0.5) * 5; it.vel.z = (Math.random() - 0.5) * 5; } }
 
@@ -578,6 +657,7 @@ function loop(now) {
       updateFurnaces(tickDt);
       updateTicks(tickDt);
       updateWorldPhysics(tickDt);
+      updateEndgame(tickDt);
       randomTicks(tickDt * (W.local > 0.3 ? 1.6 : 1));
       tickScreen();
       // noites sobrevividas (para o modo desafio)

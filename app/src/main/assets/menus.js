@@ -67,7 +67,7 @@ export async function showWorlds() {
     for (const w of worlds) {
       const r = el('div', 'world', list);
       const info = el('div', 'winfo', r);
-      el('b', '', info, w.name);
+      el('b', '', info, w.name + (w.completed ? ' 🏆' : ''));
       el('span', 'muted', info, `${MODES[w.mode] || w.mode} · semente ${w.seed} · ${new Date(w.played).toLocaleString('pt-BR')}${w.gen < 3 ? ' · gerador clássico' : ''}`);
       const b = el('div', 'wbtns', r);
       el('button', 'small primary', b, 'Abrir').onclick = () => hook('openWorld', w);

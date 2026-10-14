@@ -20,6 +20,20 @@ multiplayer em rede local e atualização automática.
 | ![Noite](docs/screenshots/v3-noite.jpg) | ![Mapa](docs/screenshots/v3-mapa.jpg) |
 | ![Inventário](docs/screenshots/v3-inventario.jpg) | ![Criativo](docs/screenshots/v3-criativo.jpg) |
 
+## Novidades da 3.4.0 — zerar o jogo (Nether e The End)
+
+Caminho para zerar:
+1. **Obsidiana**: água sobre lava parada (fonte) vira obsidiana; minere com picareta de diamante.
+2. **Portal do Nether**: moldura de obsidiana (interior de 2×3 até 21×21), acenda com o isqueiro e fique dentro por alguns segundos. 1 bloco no Nether = 8 no mundo normal; do outro lado o jogo encontra ou constrói um portal.
+3. **Nether**: cavernas de netherrack sobre um mar de lava, pedra luminosa, areia das almas, minério de quartzo e **fortalezas de tijolo do Nether** (uma a cada ~160 blocos) onde aparecem os **blazes** (voam e atiram bolas de fogo; deixam varas de blaze).
+4. **Endermen** aparecem à noite (raros) e no End; deixam **pérolas do ender** (clique com a pérola para se teletransportar).
+5. **Olho do ender** = pérola + pó de blaze. Usado no mundo normal, ele voa na direção da **Fortaleza** (sala subterrânea a 300–700 blocos da origem, com escada até a superfície).
+6. **Portal do End**: coloque olhos nas 12 molduras; o portal abre e leva ao **End**.
+7. **The End**: ilha flutuante de pedra do End com 10 pilares de obsidiana e **cristais** que curam o **Dragão do End** (200 de vida, barra no topo da tela). Destrua os cristais com flechas e derrote o dragão.
+8. O portal de saída se abre no centro da ilha (com o ovo do dragão). Entre nele: **créditos com as estatísticas da sua jornada** e o mundo ganha um 🏆 na lista.
+
+Detalhes: cada dimensão é salva separadamente no mesmo mundo (saves antigos continuam funcionando); no modo Desafio há 7 objetivos novos até o dragão; ao morrer no Nether/End você renasce no mundo normal. No multiplayer as dimensões ainda não estão disponíveis (o portal acende, mas não teletransporta).
+
 ## Novidades da 3.3.0
 
 - **Tocha na mão ilumina em volta**: segurar tocha, lâmpada, lava (balde), cristal ou fornalha acesa cria uma luz dinâmica que acompanha o jogador, com tremulação e acendimento suave. Funciona em todos os presets (inclusive no celular). No multiplayer, a tocha na mão dos 2 jogadores mais próximos também ilumina (com "Luzes dinâmicas" ligadas). Opção "Tocha na mão ilumina em volta" nas configurações gráficas.

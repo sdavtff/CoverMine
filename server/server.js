@@ -17,7 +17,7 @@ const path = require('path');
 const os = require('os');
 const { WebSocketServer } = require('ws');
 
-const BLOCK_COUNT = 86;
+const BLOCK_COUNT = 98;
 const REACH = 10; // blocos (o jogo usa 5–6; folga para latência)
 const RATE = 40; // edições por segundo
 const MAX_MSG = 4 * 1024 * 1024;
