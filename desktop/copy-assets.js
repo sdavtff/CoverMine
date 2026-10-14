@@ -6,3 +6,5 @@ const dst = path.join(__dirname, 'game');
 fs.rmSync(dst, { recursive: true, force: true });
 fs.cpSync(src, dst, { recursive: true });
 console.log('assets copiados para', dst);
+// servidor multiplayer embutido ("Hospedar sala")
+fs.copyFileSync(path.join(__dirname, '..', 'server', 'server.js'), path.join(__dirname, 'server.js'));

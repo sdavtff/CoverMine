@@ -1,7 +1,7 @@
 {
   "name": "voxelcraft",
   "productName": "VoxelCraft",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "VoxelCraft HD - jogo de construção em blocos",
   "author": "VoxelCraft",
   "main": "main.js",
@@ -19,12 +19,32 @@
     "appId": "com.davi.voxelcraft",
     "productName": "VoxelCraft",
     "artifactName": "VoxelCraft-HD.exe",
-    "directories": { "output": "dist" },
-    "files": ["main.js", "game/**/*"],
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "server.js",
+      "game/**/*",
+      "node_modules/ws/**/*"
+    ],
     "win": {
-      "target": [{ "target": "portable", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "signAndEditExecutable": false
     },
-    "portable": { "unicode": true }
+    "portable": {
+      "unicode": true
+    }
+  },
+  "dependencies": {
+    "ws": "8.18.0"
   }
 }

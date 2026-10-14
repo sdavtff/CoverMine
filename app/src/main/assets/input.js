@@ -15,7 +15,7 @@ export function frameInput() {
   const sneak = !!(IN.touchDown || k.ShiftLeft || k.ShiftRight);
   const out = {
     mx, mz, jump, sneak,
-    sprint: (!G.isTouch && (k.ControlLeft || k.ControlRight || IN.sprintToggle)) || (G.isTouch && Math.hypot(IN.jx, IN.jy) > 0.97),
+    sprint: !!(IN.sprintToggle || k.ControlLeft || k.ControlRight || (G.isTouch && Math.hypot(IN.jx, IN.jy) > 0.97)),
     jumpPressed: jump && !IN._jump, sneakPressed: sneak && !IN._sneak,
   };
   IN._jump = jump; IN._sneak = sneak;

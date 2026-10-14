@@ -44,7 +44,8 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-f
 #joy-knob { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%; background: rgba(255,255,255,0.45); }
 #btns { position: absolute; right: calc(18px + env(safe-area-inset-right)); bottom: calc(var(--slot) + 24px); display: flex; flex-direction: column-reverse; align-items: center; gap: 10px; }
 #topbtns { position: absolute; right: calc(8px + env(safe-area-inset-right)); top: 8px; display: flex; gap: 6px; }
-#minimap { top: calc(70px * var(--ui)); }
+/* celular: minimapa à esquerda, longe dos botões de ação */
+#minimap { top: calc(40px * var(--ui)); left: calc(8px + env(safe-area-inset-left)); right: auto; }
 .btn { width: calc(70px * var(--ui)); height: calc(70px * var(--ui)); border-radius: 50%; background: rgba(255,255,255,0.18); border: 2px solid rgba(255,255,255,0.45);
   display: flex; align-items: center; justify-content: center; font-size: calc(26px * var(--ui)); font-weight: bold; color: rgba(255,255,255,0.92); cursor: pointer; }
 .btn.small { width: calc(48px * var(--ui)); height: calc(48px * var(--ui)); font-size: calc(17px * var(--ui)); }
@@ -52,7 +53,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-f
 .btn.active, .btn.on { background: rgba(120,200,255,0.5); }
 #btn-chat { display: none; }
 body.desktop #btns, body.desktop #joy-base, body.desktop #topbtns { display: none !important; }
-body.desktop #minimap { top: 10px; }
+body.desktop #minimap { top: 10px; left: auto; right: calc(8px + env(safe-area-inset-right)); }
 body.hc { --ui: 1.2; }
 body.hc #info, body.hc #toast { background: #000; }
 /* telas do jogo */

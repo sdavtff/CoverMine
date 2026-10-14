@@ -176,5 +176,5 @@ export function openMapScreen(openScreen, el) {
     cv.addEventListener('wheel', (e) => { e.preventDefault(); scale = Math.max(0.25, Math.min(8, scale * (e.deltaY < 0 ? 1.2 : 1 / 1.2))); draw(); }, { passive: false });
     cv.style.touchAction = 'none';
     setTimeout(() => { resize(); draw(); renderList(); }, 0);
-  });
+  }, null, { noItems: true });
 }

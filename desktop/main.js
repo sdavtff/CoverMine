@@ -1,5 +1,5 @@
 // VoxelCraft para PC (Windows/Linux/macOS) — roda o mesmo jogo do APK num Chromium embutido.
-const { app, BrowserWindow, protocol, net, Menu } = require('electron');
+const { app, BrowserWindow, protocol, net, Menu, ipcMain } = require('electron');
 const path = require('path');
 const { pathToFileURL } = require('url');
 
@@ -22,7 +22,7 @@ function createWindow() {
     backgroundColor: '#000000',
     title: 'VoxelCraft',
     autoHideMenuBar: true,
-    webPreferences: { contextIsolation: true, nodeIntegration: false, backgroundThrottling: false },
+    webPreferences: { contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, preload: path.join(__dirname, 'preload.js') },
   });
   win.setMenuBarVisibility(false);
   // F11 / Alt+Enter: tela cheia
@@ -37,6 +37,21 @@ function createWindow() {
   win.on('close', () => { win.webContents.executeJavaScript('window.saveGame && window.saveGame()').catch(() => {}); });
   win.loadURL('app://voxelcraft/index.html');
 }
+
+// "Hospedar sala": servidor multiplayer embutido (mesmo código de server/server.js)
+let hosted = null;
+ipcMain.handle('vc-host', async (_e, port) => {
+  try {
+    if (!hosted) {
+      const { startServer } = require('./server.js');
+      hosted = await startServer({ port: port || 8765, dataDir: path.join(app.getPath('userData'), 'salas') });
+    }
+    return { ok: true, addresses: hosted.addresses };
+  } catch (e) {
+    return { ok: false, error: e.code === 'EADDRINUSE' ? 'a porta ' + (port || 8765) + ' já está em uso' : e.message };
+  }
+});
+app.on('before-quit', () => { if (hosted) hosted.close(); });
 
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);

@@ -24,7 +24,7 @@ export function defaultSettings(isTouch) {
     preset: 'high',
     light: 1, fog: true, fogDensity: 1, fpsCap: isTouch ? 60 : 0, eco: false, auto: true,
     sens: 1, fov: 75, volume: 0.8, uiScale: 1, invertY: false, minimap: true, showInfo: true, compass: true, viewBob: true,
-    reduceFlash: false, highContrast: false, name: 'Jogador', skin: null, camDefault: 0,
+    reduceFlash: false, highContrast: false, name: 'Jogador', skin: null, camDefault: 0, autoUpdate: true,
     bloom: true, vignette: true, grading: true,
   }, PRESETS.high);
 }

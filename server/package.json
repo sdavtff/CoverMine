@@ -1,0 +1,9 @@
+{
+  "name": "voxelcraft-server",
+  "version": "3.0.0",
+  "description": "Servidor multiplayer do VoxelCraft (WebSocket)",
+  "main": "server.js",
+  "private": true,
+  "scripts": { "start": "node server.js 8765", "test": "node test-multiplayer.js" },
+  "dependencies": { "ws": "8.18.0" }
+}

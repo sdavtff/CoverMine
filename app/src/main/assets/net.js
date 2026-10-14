@@ -12,7 +12,15 @@ export const NET = {
   isClient() { return this.connected && !this.host; },
   canEdit() { if (!this.connected) return true; if (!this.canBuild) { hook('toast', 'Você não tem permissão para construir nesta sala.'); return false; } return true; },
   send(o) { if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify(o)); },
-  sendBlock(x, y, z, id, m) { if (this.connected && !this.applying) this.send({ t: 'block', x, y, z, id, m }); },
+  pending: new Map(),
+  sendBlock(x, y, z, id, m, oid, om) {
+    if (!this.connected || this.applying) return;
+    // guarda o valor anterior para desfazer se o servidor recusar
+    const k = x + ',' + y + ',' + z;
+    if (!this.pending.has(k)) this.pending.set(k, { id: oid ?? 0, m: om || 0, t: performance.now() });
+    if (this.pending.size > 512) for (const [pk, v] of this.pending) if (performance.now() - v.t > 5000) this.pending.delete(pk);
+    this.send({ t: 'block', x, y, z, id, m });
+  },
   sendWeather() { if (this.connected && this.host) this.send({ t: 'env', time: G.gameTime, weather: W.state, timer: W.timer }); },
   sendTime() { this.sendWeather(); },
   sendProfile() { if (this.connected) this.send({ t: 'profile', name: G.settings.name, skin: G.settings.skin }); },
@@ -89,7 +97,7 @@ async function onMessage(m, status) {
     case 'pos': { const p = NET.players.get(m.id); if (p) { Object.assign(p.target, { x: m.x, y: m.y, z: m.z, yaw: m.yaw, pitch: m.pitch }); p.held = m.held; p.swing = m.swing; } break; }
     case 'profile': { const p = NET.players.get(m.id); if (p) { p.name = m.name; setRemoteSkin(p, m.skin); } break; }
     case 'block': {
-      if (m.by === NET.id) break;
+      if (m.by === NET.id) { NET.pending.delete(m.x + ',' + m.y + ',' + m.z); break; }
       NET.applying = true;
       hook('setBlock', m.x, m.y, m.z, m.id, m.m || 0);
       NET.applying = false;
@@ -97,8 +105,11 @@ async function onMessage(m, status) {
     }
     case 'deny': {
       // servidor recusou: desfaz a edição local
+      const k = m.x + ',' + m.y + ',' + m.z, prev = NET.pending.get(k);
+      NET.pending.delete(k);
       NET.applying = true;
-      hook('setBlock', m.x, m.y, m.z, m.id, m.m || 0);
+      if (m.id >= 0) hook('setBlock', m.x, m.y, m.z, m.id, m.m || 0);
+      else if (prev) hook('setBlock', m.x, m.y, m.z, prev.id, prev.m);
       NET.applying = false;
       if (m.reason) hook('toast', m.reason);
       break;
@@ -107,6 +118,12 @@ async function onMessage(m, status) {
     case 'env': if (!NET.host) { G.gameTime = m.time; if (m.weather && W.state !== m.weather) { W.state = m.weather; W.timer = 1e9; } } break;
     case 'perm': NET.canBuild = !!m.canBuild; hook('toast', NET.canBuild ? 'Você pode construir nesta sala.' : 'O anfitrião desativou a construção para visitantes.'); break;
     case 'mobs': if (!NET.host) applyMobSnapshot(m.list); break;
+    case 'host':
+      // o anfitrião anterior saiu: este cliente passa a simular criaturas, hora e clima
+      NET.host = true;
+      for (const e of E.list) if (e.proxy) { e.proxy = false; e.netPos = null; }
+      hook('toast', 'Você agora é o anfitrião da simulação desta sala.');
+      break;
     case 'hitmob': if (NET.host) { const e = E.list.find((x) => x.id === m.id); if (e) attackEntity(e, Math.min(10, m.dmg), { pos: m.from }); } break;
   }
 }

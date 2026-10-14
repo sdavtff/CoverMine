@@ -80,7 +80,7 @@ function icons(v, ch, cls) {
 }
 
 // ---------------- telas ----------------
-function openScreen(title, build, onClose) {
+function openScreen(title, build, onClose, opts = {}) {
   closeScreen(true);
   const scr = $('screen');
   scr.innerHTML = '';
@@ -98,6 +98,8 @@ function openScreen(title, build, onClose) {
   const trash = el('button', 'small danger', head, '🗑');
   trash.title = 'Descartar item na mão';
   trash.onclick = () => { if (UI.cursor) { if (G.mode !== 'creative') hook('throwItem', UI.cursor.k, UI.cursor.n, UI.cursor.d); UI.cursor = null; refreshCursor(); } };
+  // telas sem itens (mapa): esconde mão/rápido/lixeira
+  if (opts.noItems) for (const e of [UI.cursorEl, quick, trash]) e.style.display = 'none';
   const close = el('button', 'small', head, '✕');
   close.onclick = () => hook('closeScreen');
   const body = el('div', 'panel-body', box);

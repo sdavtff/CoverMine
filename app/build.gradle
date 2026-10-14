@@ -10,8 +10,8 @@ android {
         applicationId 'com.davi.voxelcraft'
         minSdk 24
         targetSdk 34
-        versionCode 2
-        versionName '2.0-hd'
+        versionCode 3
+        versionName '3.0.0'
     }
 
     // Mesma chave usada por tools/build_apk.py: APKs gerados pelos dois caminhos

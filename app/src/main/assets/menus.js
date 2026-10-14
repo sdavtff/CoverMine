@@ -138,6 +138,7 @@ export function showSettings(back) {
       chk('Balanço da câmera ao andar', 'viewBob');
       chk('Reduzir flashes (raios)', 'reduceFlash');
       chk('Textos grandes / alto contraste', 'highContrast');
+      chk('Atualizar o jogo automaticamente (com internet)', 'autoUpdate');
     };
     const tg = el('button', 'tab on', tabs, 'Configurações Gráficas'), tgen = el('button', 'tab', tabs, 'Geral e acessibilidade');
     tg.onclick = () => { tg.classList.add('on'); tgen.classList.remove('on'); showGfx(); };

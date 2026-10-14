@@ -24,7 +24,9 @@ import urllib.request
 import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BASE_APK = os.path.join(ROOT, 'tools', 'base', 'VoxelCraft-original.apk')
+# wrapper Android compilado (manifesto com INTERNET + cleartext e WebView com conteúdo misto liberado,
+# gerado a partir do APK original com apktool — ver README). O original fica em tools/base/ como referência.
+BASE_APK = os.path.join(ROOT, 'tools', 'base', 'VoxelCraft-wrapper.apk')
 ASSETS = os.path.join(ROOT, 'app', 'src', 'main', 'assets')
 SIGNER = os.path.join(ROOT, 'tools', 'uber-apk-signer.jar')
 SIGNER_URL = 'https://github.com/patrickfav/uber-apk-signer/releases/download/v1.3.0/uber-apk-signer-1.3.0.jar'

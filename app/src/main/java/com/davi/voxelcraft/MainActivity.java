@@ -47,6 +47,8 @@ public class MainActivity extends Activity {
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setMediaPlaybackRequiresUserGesture(false);
+        // multiplayer em rede local (ws://) a partir da página https:// do app
+        s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         web.setOverScrollMode(View.OVER_SCROLL_NEVER);
         web.setWebViewClient(new WebViewClient() {
             @Override

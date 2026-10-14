@@ -112,7 +112,7 @@ function wireHooks() {
   H.texturesChanged = () => { setIconAtlas(R.atlas, R.atlasCanvas, R.uv); if (UI.hot) for (const s of UI.hot) s.key = undefined; resetItemMeshes(); resetMapColors(); if (HAND.arm) HAND.heldKey = null; };
   H.chunkMeshed = (c) => { const p = G.player; if (p && Math.abs(c.cx * 16 + 8 - p.pos.x) < 16 * 5 && Math.abs(c.cz * 16 + 8 - p.pos.z) < 16 * 5) exploreChunk(c); };
   H.netCanEdit = (x, y, z) => NET.canEdit(x, y, z);
-  H.netBlock = (x, y, z, id, m) => NET.sendBlock(x, y, z, id, m);
+  H.netBlock = (x, y, z, id, m, oid, om) => NET.sendBlock(x, y, z, id, m, oid, om);
   H.settingsChanged = (key) => onSettingsChanged(key);
   H.settingsClosed = () => { saveSettings(); };
   H.openWorld = (w) => openWorld(w);
@@ -243,8 +243,10 @@ export async function startWorld(meta, data, opts = {}) {
 }
 function spawnAt(p, s) {
   const w = G.world;
-  let y = s.y;
+  let y = Math.min(126, Math.floor(s.y));
   const x = Math.floor(s.x), z = Math.floor(s.z);
+  // desce até o chão (a altura estimada pelo gerador pode ficar acima do terreno real) e depois sobe até haver espaço livre
+  for (let i = 0; i < 40 && y > 1 && !SOLID[w.getBlock(x, y - 1, z)]; i++) y--;
   for (let i = 0; i < 80; i++) { if (!SOLID[w.getBlock(x, y, z)] && !SOLID[w.getBlock(x, y + 1, z)] && SOLID[w.getBlock(x, y - 1, z)]) break; y++; }
   p.pos.x = x + 0.5; p.pos.y = y; p.pos.z = z + 0.5;
   p.vel.x = p.vel.y = p.vel.z = 0;

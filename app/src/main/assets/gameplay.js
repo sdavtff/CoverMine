@@ -136,9 +136,9 @@ function attackEntity(ent) {
 // ---------------- colocar / usar ----------------
 export function setBlock(x, y, z, id, meta) {
   const w = G.world;
-  const old = w.getBlock(x, y, z);
+  const old = w.getBlock(x, y, z), oldMeta = w.getMeta(x, y, z);
   if (!w.setBlock(x, y, z, id, meta)) return false;
-  hook('netBlock', x, y, z, id, meta);
+  hook('netBlock', x, y, z, id, meta, old, oldMeta);
   neighborUpdate(x, y, z, old, id);
   return true;
 }
