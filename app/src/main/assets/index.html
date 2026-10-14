@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>VoxelCraft HD</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="water-overlay" class="overlay"></div>
+<div id="lava-overlay" class="overlay"></div>
+<div id="dmg-flash" class="overlay"></div>
+<div id="fade" class="overlay"></div>
+<div id="hud">
+  <div id="crosshair"></div>
+  <div id="info"></div>
+  <div id="compass"><span id="compass-deg"></span></div>
+  <canvas id="minimap" width="120" height="120"></canvas>
+  <div id="objective"></div>
+  <div id="blockname"></div>
+  <div id="toast"></div>
+  <div id="chat-log"></div>
+  <div id="stats"></div>
+  <div id="hotbar"></div>
+  <div id="joy-base"><div id="joy-knob"></div></div>
+  <div id="btns">
+    <div class="btn" id="btn-jump">&#9650;</div>
+    <div class="btn small" id="btn-down">&#9660;</div>
+    <div class="btn small" id="btn-fly">VOAR</div>
+    <div class="btn small" id="btn-sprint">&raquo;</div>
+  </div>
+  <div id="topbtns">
+    <div class="btn small" id="btn-chat">💬</div>
+    <div class="btn small" id="btn-map">🗺</div>
+    <div class="btn small" id="btn-cam">👁</div>
+    <div class="btn small" id="btn-inv">🎒</div>
+    <div class="btn small" id="btn-menu">II</div>
+  </div>
+</div>
+<div id="screen"></div>
+<div id="death"><div><h2>Você morreu!</h2><p></p><button class="big">Renascer</button></div></div>
+<div id="menu" class="hidden"></div>
+<div id="loading">Carregando...</div>
+<script type="module" src="boot.js"></script>
+</body>
+</html>

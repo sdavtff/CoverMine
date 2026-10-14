@@ -1,0 +1,50 @@
+{
+  "name": "voxelcraft",
+  "productName": "VoxelCraft",
+  "version": "3.4.0",
+  "description": "VoxelCraft HD - jogo de construção em blocos",
+  "author": "VoxelCraft",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "prepare-assets": "node copy-assets.js",
+    "start": "node copy-assets.js && electron .",
+    "dist": "node copy-assets.js && electron-builder --win portable --x64"
+  },
+  "devDependencies": {
+    "electron": "33.2.1",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "com.davi.voxelcraft",
+    "productName": "VoxelCraft",
+    "artifactName": "VoxelCraft-HD.exe",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "server.js",
+      "game/**/*",
+      "node_modules/ws/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "signAndEditExecutable": false
+    },
+    "portable": {
+      "unicode": true
+    }
+  },
+  "dependencies": {
+    "ws": "8.18.0"
+  }
+}

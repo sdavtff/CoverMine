@@ -1,0 +1,10 @@
+.gradle/
+build/
+app/build/
+local.properties
+.idea/
+*.iml
+tools/uber-apk-signer.jar
+tools/apktool.jar
+dist/*.exe
+*.whl

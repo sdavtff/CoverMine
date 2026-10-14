@@ -1,0 +1,43 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.davi.voxelcraft'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.davi.voxelcraft'
+        minSdk 24
+        targetSdk 34
+        versionCode 3
+        versionName '3.4.0'
+    }
+
+    // Mesma chave usada por tools/build_apk.py: APKs gerados pelos dois caminhos
+    // podem atualizar um ao outro sem desinstalar. Para publicar na Play Store,
+    // troque por uma chave própria e guarde a senha fora do repositório.
+    signingConfigs {
+        voxelcraft {
+            storeFile rootProject.file('tools/voxelcraft.keystore')
+            storePassword 'voxelcraft'
+            keyAlias 'voxelcraft'
+            keyPassword 'voxelcraft'
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.voxelcraft
+        }
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.voxelcraft
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
